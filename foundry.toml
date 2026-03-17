@@ -1,0 +1,17 @@
+[profile.default]
+src = "contracts/src"
+test = "contracts/test"
+out = "out"
+libs = ["lib"]
+solc_version = "0.8.28"
+
+# Optimizer settings
+optimizer = true
+optimizer_runs = 200
+
+# Output selection for analysis tooling
+extra_output = ["abi", "evm.bytecode", "evm.deployedBytecode", "metadata", "storageLayout"]
+extra_output_files = ["abi", "evm.bytecode", "evm.deployedBytecode", "metadata"]
+
+# AST output
+ast = true

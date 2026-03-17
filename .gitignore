@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+dist/
+build/
+*.whl
+
+# Virtual environments
+.venv/
+venv/
+env/
+.uv/
+
+# Testing
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# IDE / Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+
+# Foundry
+cache/
+out/
+broadcast/
+
+# Reports (generated, not tracked)
+reports/*
+!reports/.gitkeep
+
+# Compiled sample outputs (generated)
+samples/compiled/*
+!samples/compiled/.gitkeep
+
+# OS
+desktop.ini
