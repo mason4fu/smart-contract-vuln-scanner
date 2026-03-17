@@ -1,0 +1,33 @@
+name: Foundry CI
+
+on:
+  push:
+    branches: [master, main, "setup/**", "feature/**"]
+    paths:
+      - "contracts/**"
+      - "foundry.toml"
+      - "remappings.txt"
+      - "lib/**"
+  pull_request:
+    branches: [master, main]
+    paths:
+      - "contracts/**"
+      - "foundry.toml"
+      - "remappings.txt"
+      - "lib/**"
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Build contracts
+        run: forge build
+
+      - name: Run Foundry tests
+        run: forge test -v
