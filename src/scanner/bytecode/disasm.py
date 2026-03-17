@@ -6,7 +6,7 @@ enabling bytecode-level analysis for future detectors.
 
 from __future__ import annotations
 
-from pyevmasm import disassemble_hex, assemble_hex, Instruction
+from pyevmasm import Instruction, disassemble_hex
 
 
 def disassemble(hex_bytecode: str) -> list[Instruction]:

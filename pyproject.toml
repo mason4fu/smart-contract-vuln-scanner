@@ -8,8 +8,9 @@ requires-python = ">=3.12"
 dependencies = [
   "typer>=0.15",
   "pydantic>=2.0",
+  "pydantic-settings>=2.0",
   "py-solc-x>=2.0",
-  "pyevmasm>=0.3",
+  "pyevmasm>=0.2",
   "rich>=13.0",
 ]
 
@@ -36,6 +37,9 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B", "SIM"]
 
+[tool.ruff.lint.per-file-ignores]
+"src/scanner/cli.py" = ["B008"]  # Typer uses function calls in defaults by design
+
 [tool.ruff.lint.isort]
 known-first-party = ["scanner"]
 
@@ -46,3 +50,10 @@ packages = ["scanner"]
 strict = false
 warn_return_any = true
 warn_unused_configs = true
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.5.1",
+    "pytest>=9.0.2",
+    "ruff>=0.15.6",
+]

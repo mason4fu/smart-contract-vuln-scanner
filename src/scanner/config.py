@@ -19,9 +19,7 @@ class ScannerConfig(BaseSettings):
     solc_binary: str | None = Field(
         default=None, description="Path to a local solc binary. Overrides managed version."
     )
-    output_dir: Path = Field(
-        default=Path("reports"), description="Directory for analysis output."
-    )
+    output_dir: Path = Field(default=Path("reports"), description="Directory for analysis output.")
     log_level: str = Field(default="INFO", description="Logging verbosity.")
 
 

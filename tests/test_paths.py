@@ -2,8 +2,8 @@
 
 from pathlib import Path
 
-from scanner.utils.paths import project_root, resolve_source
 from scanner.config import load_config
+from scanner.utils.paths import project_root, resolve_source
 
 
 def test_project_root_finds_pyproject():
