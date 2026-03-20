@@ -6,6 +6,7 @@ resolving source file paths consistently across platforms.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 
@@ -41,7 +42,20 @@ def resolve_source(target: str | Path) -> Path:
     Returns:
         Resolved absolute path.
     """
-    p = Path(target)
+    # `Path.is_absolute()` is OS-dependent. In GitHub Actions (Linux),
+    # `Path("C:/...")` is not considered absolute, even though users may
+    # provide Windows-style absolute paths. Detect those explicitly.
+    s = str(target)
+    p = Path(s)
+
+    # Unix-style absolute paths (Linux/macOS): `/home/...`
     if p.is_absolute():
         return p
+
+    # Windows drive-letter absolute paths: `C:/...` or `C:\...`
+    # Regex checks the *string form* so it works even when running on Linux.
+    if re.match(r"^[A-Za-z]:[\\/].*$", s):
+        return p
+
+    # Otherwise treat as relative to the project root.
     return project_root() / p
