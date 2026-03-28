@@ -95,9 +95,7 @@ def _extract_contract(node: dict[str, Any], source_file: str) -> ContractInfo:
     has_owner_pattern = any(_is_owner_variable(v) for v in state_variables)
 
     # Extract modifiers first (functions may reference them)
-    modifier_nodes = [
-        c for c in node.get("nodes", []) if c.get("nodeType") == "ModifierDefinition"
-    ]
+    modifier_nodes = [c for c in node.get("nodes", []) if c.get("nodeType") == "ModifierDefinition"]
     modifiers = [_extract_modifier(m, source_file) for m in modifier_nodes]
     modifier_map = {m.name: m for m in modifiers}
 
@@ -210,8 +208,7 @@ def _extract_function(
     # Compute has_auth_guard:
     # 1. Any applied modifier with has_auth_check
     modifier_guarded = any(
-        modifier_map.get(m, ModifierInfo(name=m)).has_auth_check
-        for m in applied_modifiers
+        modifier_map.get(m, ModifierInfo(name=m)).has_auth_check for m in applied_modifiers
     )
     # 2. Any inline require/if with msg.sender
     inline_guarded = any(ac.uses_msg_sender for ac in auth_checks)
@@ -231,14 +228,19 @@ def _extract_function(
     has_auth_guard = modifier_guarded or inline_guarded or one_hop_guarded
 
     # Classify function sensitivity by name if no body actions found
-    if not sensitive_actions and not is_constructor and not is_fallback and not is_receive:
-        if _is_sensitive_by_name(name):
-            sensitive_actions.append(
-                SensitiveAction(
-                    kind="state_mutation",
-                    description=f"Function '{name}' name suggests privileged operation",
-                )
+    if (
+        not sensitive_actions
+        and not is_constructor
+        and not is_fallback
+        and not is_receive
+        and _is_sensitive_by_name(name)
+    ):
+        sensitive_actions.append(
+            SensitiveAction(
+                kind="state_mutation",
+                description=f"Function '{name}' name suggests privileged operation",
             )
+        )
 
     return FunctionInfo(
         name=name,
@@ -336,33 +338,30 @@ def _body_is_revert(node: dict[str, Any]) -> bool:
 def _node_uses_msg_sender(node: dict[str, Any]) -> bool:
     """Return True if this node or any descendant accesses msg.sender."""
     for n in walk_ast(node):
-        if n.get("nodeType") == "MemberAccess":
-            if n.get("memberName") == "sender":
-                expr = n.get("expression", {})
-                if expr.get("name") == "msg" or (
-                    expr.get("nodeType") == "Identifier" and expr.get("name") == "msg"
-                ):
-                    return True
+        if n.get("nodeType") == "MemberAccess" and n.get("memberName") == "sender":
+            expr = n.get("expression", {})
+            if expr.get("name") == "msg" or (
+                expr.get("nodeType") == "Identifier" and expr.get("name") == "msg"
+            ):
+                return True
     return False
 
 
 def _node_uses_tx_origin(node: dict[str, Any]) -> bool:
     """Return True if this node or any descendant accesses tx.origin."""
     for n in walk_ast(node):
-        if n.get("nodeType") == "MemberAccess":
-            if n.get("memberName") == "origin":
-                expr = n.get("expression", {})
-                if expr.get("name") == "tx":
-                    return True
+        if n.get("nodeType") == "MemberAccess" and n.get("memberName") == "origin":
+            expr = n.get("expression", {})
+            if expr.get("name") == "tx":
+                return True
     return False
 
 
 def _node_references_owner(node: dict[str, Any]) -> bool:
     """Return True if the node references an owner-like variable."""
     for n in walk_ast(node):
-        if n.get("nodeType") == "Identifier":
-            if _is_owner_variable(n.get("name", "")):
-                return True
+        if n.get("nodeType") == "Identifier" and _is_owner_variable(n.get("name", "")):
+            return True
     return False
 
 
@@ -412,9 +411,7 @@ def _detect_sensitive_action(
             lhs = inner.get("leftHandSide", {})
             lhs_name = lhs.get("name", "")
             if lhs_name and _is_owner_variable(lhs_name) and lhs_name in state_variables:
-                return SensitiveAction(
-                    kind="owner_change", description=f"assigns to '{lhs_name}'"
-                )
+                return SensitiveAction(kind="owner_change", description=f"assigns to '{lhs_name}'")
             # role mapping write: roles[addr] = ...
             if lhs.get("nodeType") == "IndexAccess":
                 base = lhs.get("baseExpression", {})

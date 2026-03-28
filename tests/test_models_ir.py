@@ -1,7 +1,6 @@
 """Tests for IR Pydantic models."""
 
-import pytest
-
+from scanner.models.findings import SourceLocation
 from scanner.models.ir import (
     AuthCheck,
     ContractInfo,
@@ -9,7 +8,6 @@ from scanner.models.ir import (
     ModifierInfo,
     SensitiveAction,
 )
-from scanner.models.findings import SourceLocation
 
 
 def test_auth_check_defaults():

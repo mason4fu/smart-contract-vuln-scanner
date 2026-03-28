@@ -23,6 +23,9 @@ _CHILD_KEYS = (
     "condition",
     "rightHandSide",
     "leftHandSide",
+    # BinaryOperation / Comparison nodes use these
+    "leftExpression",
+    "rightExpression",
     "parameters",
     "returnParameters",
     "modifiers",
@@ -32,6 +35,11 @@ _CHILD_KEYS = (
     "initialValue",
     "declarations",
     "eventCall",
+    # TypeName and other wrapper nodes
+    "baseExpression",
+    "indexExpression",
+    "keyType",
+    "valueType",
 )
 
 

@@ -12,7 +12,7 @@ from typing import Any
 from scanner.bytecode.analysis import analyze_bytecode
 from scanner.bytecode.loader import ContractBytecode
 from scanner.detectors import BaseDetector, register_detector
-from scanner.models.findings import Finding, Severity, SourceLocation
+from scanner.models.findings import Finding, Severity
 from scanner.models.ir import ContractInfo
 
 _DETECTOR_NAME = "access-control"

@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-import pytest
-
 from scanner.bytecode.analysis import (
     BytecodeAnalysis,
     analyze_bytecode,
     detect_caller_checks,
     detect_origin_usage,
-    extract_function_selectors,
 )
 from scanner.bytecode.disasm import disassemble
 from scanner.bytecode.loader import extract_bytecode

@@ -6,7 +6,6 @@ Uses Typer for command-line argument parsing. Sub-commands:
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 from typing import Annotated
 
@@ -42,9 +41,7 @@ def main(
 def scan(
     target: Annotated[
         Path,
-        typer.Argument(
-            help="Solidity file, compiled JSON, .bin bytecode, or directory."
-        ),
+        typer.Argument(help="Solidity file, compiled JSON, .bin bytecode, or directory."),
     ],
     output: Annotated[
         Path,
@@ -75,15 +72,14 @@ def scan(
       - A pre-compiled .json file (standard JSON output)
       - A .bin or .hex file (bytecode-only analysis)
     """
+    # Ensure access control detector is registered
+    import scanner.detectors.access_control  # noqa: F401
     from scanner.ast.analysis import analyze_source
     from scanner.bytecode.loader import extract_bytecode
     from scanner.compiler.solc import compile_source, load_compiler_output
-    from scanner.detectors import DETECTOR_REGISTRY, get_all_detectors
+    from scanner.detectors import get_all_detectors
     from scanner.models.findings import Finding
-    from scanner.output.report import render_json, render_text, write_report
-
-    # Ensure access control detector is registered
-    import scanner.detectors.access_control  # noqa: F401
+    from scanner.output.report import write_report
 
     if not target.exists():
         console.print(f"[red]Error: target not found: {target}[/red]")
@@ -105,7 +101,8 @@ def scan(
         bin_files = [target]
     else:
         console.print(
-            f"[yellow]Warning: unknown file type {target.suffix}, treating as Solidity source[/yellow]"
+            f"[yellow]Warning: unknown file type {target.suffix}, "
+            "treating as Solidity source[/yellow]"
         )
         sol_files = [target]
 

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from scanner.ast.analysis import analyze_source
 from scanner.ast.loader import extract_ast, walk_ast_filtered
 
@@ -39,8 +37,8 @@ def test_analyze_source_safe_contract(compiled_safe_contract):
     mod_names = [m.name for m in contract.modifiers]
     assert "onlyOwner" in mod_names
 
-    onlyOwner = next(m for m in contract.modifiers if m.name == "onlyOwner")
-    assert onlyOwner.has_auth_check
+    only_owner = next(m for m in contract.modifiers if m.name == "onlyOwner")
+    assert only_owner.has_auth_check
 
     # transferOwnership should have auth guard
     transfer = next(f for f in contract.functions if f.name == "transferOwnership")

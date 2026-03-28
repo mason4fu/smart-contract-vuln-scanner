@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from scanner.ast.analysis import analyze_source
 from scanner.bytecode.loader import extract_bytecode
 from scanner.detectors import DETECTOR_REGISTRY, get_all_detectors
@@ -48,9 +46,7 @@ def test_missing_auth_vuln_source_findings(compiled_missing_auth_vuln):
     findings = detector.detect_from_source(contracts)
 
     auth_findings = [
-        f
-        for f in findings
-        if "missing" in f.title.lower() or "authorization" in f.title.lower()
+        f for f in findings if "missing" in f.title.lower() or "authorization" in f.title.lower()
     ]
     assert len(auth_findings) >= 1
 
