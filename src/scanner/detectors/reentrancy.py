@@ -262,6 +262,14 @@ def _is_external_call(fn_call_node: dict[str, Any]) -> bool:
     expr = fn_call_node.get("expression")
     if not isinstance(expr, dict):
         return False
+    # `addr.call{value: x}("")` is a FunctionCall whose callee is FunctionCallOptions
+    # wrapping a MemberAccess (`.call`).
+    if expr.get("nodeType") == "FunctionCallOptions":
+        inner = expr.get("expression")
+        if isinstance(inner, dict) and inner.get("nodeType") == "MemberAccess":
+            member_name = inner.get("memberName")
+            return isinstance(member_name, str) and member_name in _EXTERNAL_CALL_MEMBER_NAMES
+        return False
     if expr.get("nodeType") != "MemberAccess":
         return False
 
@@ -273,13 +281,20 @@ def _is_external_call(fn_call_node: dict[str, Any]) -> bool:
 
 def _assignment_writes_state(assign_node: dict[str, Any], state_vars: set[str]) -> bool:
     lhs = assign_node.get("leftHandSide")
-    if not isinstance(lhs, dict):
+    return _expression_writes_state(lhs, state_vars)
+
+
+def _expression_writes_state(expr: Any, state_vars: set[str]) -> bool:
+    """True if the expression is (or ends in) a write to a contract state variable."""
+    if not isinstance(expr, dict):
         return False
-    for node in _walk_solc_nodes(lhs):
-        if node.get("nodeType") == "Identifier":
-            name = node.get("name")
-            if isinstance(name, str) and name in state_vars:
-                return True
+    nt = expr.get("nodeType")
+    if nt == "Identifier":
+        name = expr.get("name")
+        return isinstance(name, str) and name in state_vars
+    if nt == "IndexAccess":
+        base = expr.get("baseExpression") or expr.get("base")
+        return _expression_writes_state(base, state_vars)
     return False
 
 
@@ -287,14 +302,7 @@ def _unary_op_writes_state(unary_node: dict[str, Any], state_vars: set[str]) -> 
     if unary_node.get("operator") not in {"++", "--"}:
         return False
     subexpr = unary_node.get("subExpression")
-    if not isinstance(subexpr, dict):
-        return False
-    for node in _walk_solc_nodes(subexpr):
-        if node.get("nodeType") == "Identifier":
-            name = node.get("name")
-            if isinstance(name, str) and name in state_vars:
-                return True
-    return False
+    return _expression_writes_state(subexpr, state_vars)
 
 
 def _node_source_location(file_name: str, node: dict[str, Any]) -> SourceLocation | None:
