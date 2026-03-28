@@ -1,13 +1,10 @@
-"""Reentrancy detector (AST-based heuristics).
+"""Reentrancy detector (AST + bytecode heuristics).
 
-This detector implements a lightweight approximation of the classic
-checks-effects-interactions guideline:
+AST: flag functions where an external call (e.g. `call`, `delegatecall`,
+`staticcall`, `send`, `transfer`) appears before a state-variable write.
 
-- Flag functions where an external call (e.g., `call`, `delegatecall`,
-  `staticcall`, `send`, `transfer`) appears before a write to a state
-  variable.
-
-Bytecode-level corroboration is intentionally deferred to a later step.
+Bytecode: if deployed runtime code contains a CALL-family opcode before a
+later SSTORE, corroborate AST findings (raise confidence to high).
 """
 
 from __future__ import annotations
@@ -15,7 +12,11 @@ from __future__ import annotations
 from typing import Any
 
 from scanner.ast.loader import extract_ast
+from scanner.bytecode.disasm import disassemble
+from scanner.bytecode.loader import extract_bytecode
 from scanner.models.findings import Finding, Severity, SourceLocation
+
+_CALL_MNEMONICS = frozenset({"CALL", "DELEGATECALL", "STATICCALL", "CALLCODE"})
 
 
 def detect_reentrancy(compiler_output: dict[str, Any]) -> list[Finding]:
@@ -29,6 +30,7 @@ def detect_reentrancy(compiler_output: dict[str, Any]) -> list[Finding]:
     """
 
     findings: list[Finding] = []
+    bytecode_corroboration = _bytecode_call_before_sstore_by_contract(compiler_output)
     ast_by_file = extract_ast(compiler_output)
 
     for file_name, ast_root in ast_by_file.items():
@@ -90,24 +92,105 @@ def detect_reentrancy(compiler_output: dict[str, Any]) -> list[Finding]:
                 _, earliest_call_node = min(call_candidates, key=lambda t: t[0])
                 location = _node_source_location(file_name, earliest_call_node)
 
+                bc_ok = bytecode_corroboration.get(contract_name, False)
+                confidence = "high" if bc_ok else "medium"
+                desc = (
+                    "A function performs an external call (e.g., call/send/transfer) "
+                    "before updating a state variable. This ordering violates "
+                    "checks-effects-interactions and may enable reentrant re-execution."
+                )
+                if bc_ok:
+                    desc += (
+                        " Deployed bytecode also shows a CALL-family instruction "
+                        "before a later SSTORE (heuristic corroboration)."
+                    )
+
                 findings.append(
                     Finding(
                         detector="reentrancy",
                         title="Potential reentrancy: external call before state update",
-                        description=(
-                            "A function performs an external call (e.g., call/send/transfer) "
-                            "before updating a state variable. This ordering violates "
-                            "checks-effects-interactions and may enable reentrant re-execution."
-                        ),
+                        description=desc,
                         severity=Severity.HIGH,
-                        confidence="medium",
+                        confidence=confidence,
                         location=location,
                         contract=contract_name,
                         function=function_name,
                     )
                 )
 
+    findings.extend(
+        _bytecode_only_low_confidence_findings(compiler_output, findings, bytecode_corroboration)
+    )
     return findings
+
+
+def _instruction_mnemonic(instr: Any) -> str:
+    for attr in ("mnemonic", "name"):
+        v = getattr(instr, attr, None)
+        if isinstance(v, str):
+            return v.upper()
+    return ""
+
+
+def _deployed_bytecode_suggests_call_before_sstore(deployed_hex: str) -> bool:
+    raw = deployed_hex.strip()
+    if raw.startswith("0x"):
+        raw = raw[2:]
+    if not raw:
+        return False
+    try:
+        instructions = disassemble(raw)
+    except (OSError, ValueError):
+        return False
+    saw_call = False
+    for instr in instructions:
+        m = _instruction_mnemonic(instr)
+        if m in _CALL_MNEMONICS:
+            saw_call = True
+        elif m == "SSTORE" and saw_call:
+            return True
+    return False
+
+
+def _bytecode_call_before_sstore_by_contract(compiler_output: dict[str, Any]) -> dict[str, bool]:
+    out: dict[str, bool] = {}
+    for cb in extract_bytecode(compiler_output):
+        if _deployed_bytecode_suggests_call_before_sstore(cb.deployed_bytecode):
+            out[cb.contract_name] = True
+    return out
+
+
+def _bytecode_only_low_confidence_findings(
+    compiler_output: dict[str, Any],
+    existing: list[Finding],
+    bytecode_corroboration: dict[str, bool],
+) -> list[Finding]:
+    """Emit low-confidence findings when bytecode matches but AST did not flag a function."""
+    ast_contracts = {f.contract for f in existing if f.contract}
+    extra: list[Finding] = []
+    for cb in extract_bytecode(compiler_output):
+        name = cb.contract_name
+        if not bytecode_corroboration.get(name, False):
+            continue
+        if name in ast_contracts:
+            continue
+        extra.append(
+            Finding(
+                detector="reentrancy",
+                title="Possible reentrancy pattern (bytecode only)",
+                description=(
+                    "Deployed bytecode contains a CALL-family instruction before a later "
+                    "SSTORE. No matching AST ordering issue was detected; treat as low "
+                    "confidence and review manually."
+                ),
+                severity=Severity.MEDIUM,
+                confidence="low",
+                location=None,
+                contract=name,
+                function="",
+            )
+        )
+    return extra
 
 
 _EXTERNAL_CALL_MEMBER_NAMES = {
