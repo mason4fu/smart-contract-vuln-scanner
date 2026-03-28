@@ -118,9 +118,6 @@ def detect_reentrancy(compiler_output: dict[str, Any]) -> list[Finding]:
                     )
                 )
 
-    findings.extend(
-        _bytecode_only_low_confidence_findings(compiler_output, findings, bytecode_corroboration)
-    )
     return findings
 
 
@@ -158,39 +155,6 @@ def _bytecode_call_before_sstore_by_contract(compiler_output: dict[str, Any]) ->
         if _deployed_bytecode_suggests_call_before_sstore(cb.deployed_bytecode):
             out[cb.contract_name] = True
     return out
-
-
-def _bytecode_only_low_confidence_findings(
-    compiler_output: dict[str, Any],
-    existing: list[Finding],
-    bytecode_corroboration: dict[str, bool],
-) -> list[Finding]:
-    """Emit low-confidence findings when bytecode matches but AST did not flag a function."""
-    ast_contracts = {f.contract for f in existing if f.contract}
-    extra: list[Finding] = []
-    for cb in extract_bytecode(compiler_output):
-        name = cb.contract_name
-        if not bytecode_corroboration.get(name, False):
-            continue
-        if name in ast_contracts:
-            continue
-        extra.append(
-            Finding(
-                detector="reentrancy",
-                title="Possible reentrancy pattern (bytecode only)",
-                description=(
-                    "Deployed bytecode contains a CALL-family instruction before a later "
-                    "SSTORE. No matching AST ordering issue was detected; treat as low "
-                    "confidence and review manually."
-                ),
-                severity=Severity.MEDIUM,
-                confidence="low",
-                location=None,
-                contract=name,
-                function="",
-            )
-        )
-    return extra
 
 
 _EXTERNAL_CALL_MEMBER_NAMES = {
