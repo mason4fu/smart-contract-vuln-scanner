@@ -16,12 +16,74 @@ Supports both **source-level (AST)** and **bytecode-level (EVM)** analysis.
 | Foundry workspace | ✅ Complete |
 | CI pipelines | ✅ Complete |
 | Smoke tests | ✅ Complete |
-| Vulnerability detectors | 🔲 Not yet implemented |
-| Full analysis pipeline | 🔲 Not yet implemented |
+| Vulnerability detectors | ✅ Complete (access-control) |
+| Full analysis pipeline | ✅ Complete |
 
-This repository contains the **foundation only**: project structure, tooling,
-environment setup, and placeholder modules. No detector logic has been
-implemented yet.
+The access control detector is fully implemented with source-level AST analysis
+and bytecode-level EVM analysis. Run `uv run scanner scan <file.sol>` to start scanning.
+
+---
+
+## Usage
+
+### Scan a Solidity file
+
+```bash
+uv run scanner scan contracts/MyContract.sol
+uv run scanner scan contracts/MyContract.sol --format json
+```
+
+### Scan a directory
+
+```bash
+uv run scanner scan contracts/ --format text
+```
+
+### Scan pre-compiled output
+
+```bash
+uv run scanner scan out/MyContract.json
+```
+
+### Scan raw bytecode
+
+```bash
+uv run scanner scan MyContract.bin
+```
+
+### Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--format`, `-f` | `text` | Output format: `json` or `text` |
+| `--output`, `-o` | `reports/` | Report output directory |
+| `--detector`, `-d` | all | Run only a specific detector |
+| `--bytecode-only` | false | Skip source analysis |
+| `--solc-version` | `0.8.28` | Solidity compiler version |
+
+## Detectors
+
+### `access-control` (implemented)
+
+Detects access control vulnerabilities in Solidity contracts.
+
+| Rule | SWC | Severity |
+|------|-----|----------|
+| `tx.origin` used for authorization | SWC-115 | HIGH |
+| Sensitive function with no auth guard | SWC-105/106 | HIGH |
+
+See [`docs/access-control-detector.md`](docs/access-control-detector.md) for details.
+
+## Dataset Evaluation
+
+Run the access control detector against the SmartBugs Curated dataset:
+
+```bash
+uv run python scripts/evaluate_smartbugs.py
+uv run python scripts/evaluate_smartbugs.py --output results.json
+```
+
+See [`docs/evaluation.md`](docs/evaluation.md) for methodology and results.
 
 ---
 
