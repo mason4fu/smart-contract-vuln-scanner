@@ -20,6 +20,9 @@ def test_scanner_package_imports():
         "scanner.models.findings",
         "scanner.output",
         "scanner.output.report",
+        "scanner.detectors",
+        "scanner.detectors.registry",
+        "scanner.detectors.reentrancy",
         "scanner.utils",
         "scanner.utils.paths",
     ]
