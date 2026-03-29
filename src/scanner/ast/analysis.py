@@ -152,12 +152,29 @@ def _extract_contract(
 
     # Extract all functions
     functions: list[FunctionInfo] = []
+    constructor_node: dict[str, Any] | None = None
     for child in node.get("nodes", []):
         if child.get("nodeType") == "FunctionDefinition":
             f = _extract_function(
                 child, source_file, modifier_map, internal_funcs, state_variables, line_map=line_map
             )
             functions.append(f)
+            if child.get("kind") == "constructor":
+                constructor_node = child
+
+    # Detect whether any owner-like state variable is initialized
+    owner_initialized_in_constructor = False
+    owner_vars = [v for v in state_variables if _is_owner_variable(v)]
+    if owner_vars:
+        for var_name in owner_vars:
+            if _state_var_has_initial_value(node, var_name):
+                owner_initialized_in_constructor = True
+                break
+            if constructor_node is not None and _constructor_assigns_variable(
+                constructor_node, var_name
+            ):
+                owner_initialized_in_constructor = True
+                break
 
     loc = _source_loc(node, source_file, line_map=line_map)
     return ContractInfo(
@@ -169,6 +186,7 @@ def _extract_contract(
         functions=functions,
         state_variables=state_variables,
         has_owner_pattern=has_owner_pattern,
+        owner_initialized_in_constructor=owner_initialized_in_constructor,
         source_location=loc,
     )
 
@@ -529,6 +547,37 @@ def _detect_sensitive_action(
                     )
 
     return None
+
+
+def _constructor_assigns_variable(constructor_node: dict[str, Any], var_name: str) -> bool:
+    """Return True if the constructor body contains an assignment to var_name."""
+    body = constructor_node.get("body", {})
+    if not body:
+        return False
+    for n in walk_ast(body):
+        if n.get("nodeType") == "Assignment":
+            lhs = n.get("leftHandSide", {})
+            lhs_name = lhs.get("name", "")
+            if lhs_name == var_name:
+                return True
+        # ExpressionStatement wrapping an Assignment
+        if n.get("nodeType") == "ExpressionStatement":
+            expr = n.get("expression", {})
+            if expr.get("nodeType") == "Assignment":
+                lhs = expr.get("leftHandSide", {})
+                lhs_name = lhs.get("name", "")
+                if lhs_name == var_name:
+                    return True
+    return False
+
+
+def _state_var_has_initial_value(contract_node: dict[str, Any], var_name: str) -> bool:
+    """Return True if var_name is declared with a non-null initialValue in the contract AST."""
+    for child in contract_node.get("nodes", []):
+        if child.get("nodeType") == "VariableDeclaration" and child.get("name") == var_name:
+            if child.get("value") is not None or child.get("initialValue") is not None:
+                return True
+    return False
 
 
 def _is_owner_variable(name: str) -> bool:

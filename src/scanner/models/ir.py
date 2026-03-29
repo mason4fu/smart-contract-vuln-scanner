@@ -85,4 +85,5 @@ class ContractInfo(BaseModel):
     functions: list[FunctionInfo] = Field(default_factory=list)
     state_variables: list[str] = Field(default_factory=list)
     has_owner_pattern: bool = False
+    owner_initialized_in_constructor: bool = False
     source_location: SourceLocation | None = None

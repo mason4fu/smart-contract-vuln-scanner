@@ -65,3 +65,18 @@ def compiled_inherited_auth():
 @pytest.fixture(scope="session")
 def compiled_oz_ownable():
     return compile_sol_fixture("OZOwnable.sol")
+
+
+@pytest.fixture(scope="session")
+def compiled_uninitialized_owner():
+    return compile_sol_fixture("UninitializedOwner.sol")
+
+
+@pytest.fixture(scope="session")
+def compiled_dangerous_renounce():
+    return compile_sol_fixture("DangerousRenounce.sol")
+
+
+@pytest.fixture(scope="session")
+def compiled_unguarded_role_grant():
+    return compile_sol_fixture("UnguardedRoleGrant.sol")

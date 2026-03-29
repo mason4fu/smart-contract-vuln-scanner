@@ -1,12 +1,16 @@
 """Access control vulnerability detector.
 
-Implements two detection rules:
+Implements five detection rules:
 1. tx.origin used for authorization (SWC-115)
 2. Sensitive public/external functions with no authorization guard (SWC-105/106)
+3. Uninitialized owner variable (never set in constructor or declaration)
+4. Dangerous renounceOwnership without two-step transfer
+5. Unguarded role grant (public function writes to role mapping without auth)
 """
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from scanner.bytecode.analysis import analyze_bytecode
@@ -24,8 +28,10 @@ class AccessControlDetector(BaseDetector):
 
     name = _DETECTOR_NAME
     description = (
-        "Detects tx.origin-based authorization (SWC-115) and "
-        "missing authorization guards on sensitive functions (SWC-105/106)."
+        "Detects tx.origin-based authorization (SWC-115), "
+        "missing authorization guards on sensitive functions (SWC-105/106), "
+        "uninitialized owner variables, dangerous renounceOwnership, "
+        "and unguarded role grants."
     )
 
     def detect_from_source(self, contracts: list[ContractInfo]) -> list[Finding]:
@@ -41,6 +47,9 @@ class AccessControlDetector(BaseDetector):
         for contract in contracts:
             findings.extend(_check_tx_origin_source(contract))
             findings.extend(_check_missing_auth_source(contract))
+            findings.extend(_check_uninitialized_owner(contract))
+            findings.extend(_check_renounce_ownership(contract))
+            findings.extend(_check_unguarded_role_grant(contract))
         return findings
 
     def detect_from_bytecode(
@@ -172,4 +181,103 @@ def _check_missing_auth_source(contract: ContractInfo) -> list[Finding]:
                 function=func.name,
             )
         )
+    return findings
+
+
+_OWNER_VAR_RE = re.compile(
+    r"(?i)\b(owner|admin|governance|authority|controller|manager)\b"
+)
+
+
+def _check_uninitialized_owner(contract: ContractInfo) -> list[Finding]:
+    """Rule 3: Owner-like state variable exists but is never initialized (SWC-unset-owner)."""
+    findings: list[Finding] = []
+    # Only flag concrete contracts that actually have owner-pattern and functions
+    if not contract.has_owner_pattern:
+        return findings
+    if not contract.functions:
+        return findings
+    # Find owner-like state variables
+    owner_vars = [v for v in contract.state_variables if _OWNER_VAR_RE.search(v)]
+    if not owner_vars:
+        return findings
+    if not contract.owner_initialized_in_constructor:
+        findings.append(
+            Finding(
+                detector=_DETECTOR_NAME,
+                title="Uninitialized owner variable",
+                description=(
+                    f"Contract '{contract.name}' declares owner-like variable(s) "
+                    f"{owner_vars} but never initializes them in the constructor or "
+                    "at declaration. Any authentication check against this variable "
+                    "will compare against address(0), effectively disabling access control."
+                ),
+                severity=Severity.MEDIUM,
+                confidence="medium",
+                contract=contract.name,
+            )
+        )
+    return findings
+
+
+def _check_renounce_ownership(contract: ContractInfo) -> list[Finding]:
+    """Rule 4: renounceOwnership without a two-step transfer safety net."""
+    findings: list[Finding] = []
+    has_renounce = any("renounce" in f.name.lower() for f in contract.functions)
+    if not has_renounce:
+        return findings
+    has_accept = any("acceptownership" in f.name.lower() for f in contract.functions)
+    has_pending_owner = any("pendingowner" in v.lower() for v in contract.state_variables)
+    if not has_accept and not has_pending_owner:
+        renounce_func = next(f for f in contract.functions if "renounce" in f.name.lower())
+        findings.append(
+            Finding(
+                detector=_DETECTOR_NAME,
+                title="Dangerous renounceOwnership without two-step transfer",
+                description=(
+                    f"Contract '{contract.name}' exposes '{renounce_func.name}' which "
+                    "permanently removes the owner without a two-step (pendingOwner / "
+                    "acceptOwnership) safety mechanism. A mistaken call will lock all "
+                    "owner-gated functions forever."
+                ),
+                severity=Severity.LOW,
+                confidence="medium",
+                location=renounce_func.source_location,
+                contract=contract.name,
+                function=renounce_func.name,
+            )
+        )
+    return findings
+
+
+def _check_unguarded_role_grant(contract: ContractInfo) -> list[Finding]:
+    """Rule 5: Public/external function grants a role without any auth guard."""
+    findings: list[Finding] = []
+    for func in contract.functions:
+        if func.visibility not in ("public", "external"):
+            continue
+        if func.is_constructor or func.is_fallback or func.is_receive:
+            continue
+        if func.has_auth_guard:
+            continue
+        role_grants = [a for a in func.sensitive_actions if a.kind == "role_grant"]
+        if role_grants:
+            grant_descs = ", ".join(a.description or a.kind for a in role_grants[:3])
+            findings.append(
+                Finding(
+                    detector=_DETECTOR_NAME,
+                    title="Unguarded role grant",
+                    description=(
+                        f"Function '{func.name}' in contract '{contract.name}' grants "
+                        "roles or writes to an access-control mapping without any "
+                        f"authorization check. Actions: {grant_descs}. "
+                        "Any caller can escalate their own privileges."
+                    ),
+                    severity=Severity.HIGH,
+                    confidence="medium",
+                    location=func.source_location,
+                    contract=contract.name,
+                    function=func.name,
+                )
+            )
     return findings
