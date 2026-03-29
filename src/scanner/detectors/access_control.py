@@ -119,6 +119,8 @@ def _check_tx_origin_source(contract: ContractInfo) -> list[Finding]:
                         location=ac.source_location or func.source_location,
                         contract=contract.name,
                         function=func.name,
+                        swc_id="SWC-115",
+                        remediation="Replace tx.origin with msg.sender for authorization checks.",
                     )
                 )
         # Also check if tx.origin appears anywhere in the function body
@@ -138,6 +140,8 @@ def _check_tx_origin_source(contract: ContractInfo) -> list[Finding]:
                     location=func.source_location,
                     contract=contract.name,
                     function=func.name,
+                    swc_id="SWC-115",
+                    remediation="Replace tx.origin with msg.sender for authorization checks.",
                 )
             )
     return findings
@@ -179,6 +183,8 @@ def _check_missing_auth_source(contract: ContractInfo) -> list[Finding]:
                 location=func.source_location,
                 contract=contract.name,
                 function=func.name,
+                swc_id="SWC-105",
+                remediation="Add an onlyOwner modifier or require(msg.sender == owner) check.",
             )
         )
     return findings
@@ -215,6 +221,8 @@ def _check_uninitialized_owner(contract: ContractInfo) -> list[Finding]:
                 severity=Severity.MEDIUM,
                 confidence="medium",
                 contract=contract.name,
+                swc_id="SWC-105",
+                remediation="Set owner = msg.sender in the constructor.",
             )
         )
     return findings
@@ -245,6 +253,8 @@ def _check_renounce_ownership(contract: ContractInfo) -> list[Finding]:
                 location=renounce_func.source_location,
                 contract=contract.name,
                 function=renounce_func.name,
+                swc_id="SWC-106",
+                remediation="Use a two-step ownership transfer pattern with pendingOwner + acceptOwnership.",
             )
         )
     return findings
@@ -278,6 +288,8 @@ def _check_unguarded_role_grant(contract: ContractInfo) -> list[Finding]:
                     location=func.source_location,
                     contract=contract.name,
                     function=func.name,
+                    swc_id="SWC-105",
+                    remediation="Add an authorization guard to the role grant function.",
                 )
             )
     return findings

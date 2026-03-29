@@ -80,6 +80,7 @@ def scan(
     from scanner.detectors import get_all_detectors
     from scanner.models.findings import Finding
     from scanner.output.report import write_report
+    from scanner.output.rich_report import print_rich_findings
 
     if not target.exists():
         console.print(f"[red]Error: target not found: {target}[/red]")
@@ -122,12 +123,15 @@ def scan(
     detector_instances = [cls() for cls in selected]
 
     all_findings: list[Finding] = []
+    source_texts: dict[str, str] = {}
 
     # --- Process .sol files ---
     for sol_file in sol_files:
         console.print(f"Scanning [bold]{sol_file}[/bold]...")
         try:
             compiler_output = compile_source(sol_file, version=solc_version)
+            # Store source text keyed by filename (matches finding.location.file)
+            source_texts[sol_file.name] = sol_file.read_text(encoding="utf-8")
         except Exception as exc:
             console.print(f"  [red]Compilation failed: {exc}[/red]")
             continue
@@ -195,10 +199,7 @@ def scan(
             unique_findings.append(f)
 
     # --- Print summary ---
-    if unique_findings:
-        _print_findings_table(unique_findings)
-    else:
-        console.print("[green]No findings.[/green]")
+    print_rich_findings(unique_findings, source_texts)
 
     # --- Write report ---
     output.mkdir(parents=True, exist_ok=True)
