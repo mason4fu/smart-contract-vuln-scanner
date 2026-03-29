@@ -67,16 +67,22 @@ uv run scanner scan MyContract.bin
 
 Detects access control vulnerabilities in Solidity contracts.
 
-| Rule | SWC | Severity |
-|------|-----|----------|
-| `tx.origin` used for authorization | SWC-115 | HIGH |
-| Sensitive function with no auth guard | SWC-105/106 | HIGH |
+| Rule | ID | Severity | Description |
+|------|----|----------|-------------|
+| tx.origin Auth | SWC-115 | HIGH | Authorization using tx.origin instead of msg.sender |
+| Missing Auth Guard | SWC-105 | HIGH | Sensitive public/external functions with no authorization check |
+| Uninitialized Owner | SWC-105 | MEDIUM | Owner variable declared but never set in constructor |
+| Dangerous Renounce | SWC-106 | LOW | renounceOwnership() with no two-step transfer protection |
+| Unguarded Role Grant | SWC-105 | HIGH | Role/privilege grant function with no authorization guard |
 
 See [`docs/access-control-detector.md`](docs/access-control-detector.md) for details.
 
-## Dataset Evaluation
+## Evaluation Datasets
 
-Run the access control detector against the SmartBugs Curated dataset:
+- **SmartBugs Curated** (18 access control contracts) — 69% precision, 64% recall, F1=0.667
+- **Not-So-Smart-Contracts** (3 contracts) — 67% precision, 67% recall, F1=0.667
+
+Run the access control detector against the evaluation datasets:
 
 ```bash
 uv run python scripts/evaluate_smartbugs.py
