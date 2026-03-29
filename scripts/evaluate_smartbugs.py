@@ -8,6 +8,7 @@ Usage:
     uv run python scripts/evaluate_smartbugs.py
     uv run python scripts/evaluate_smartbugs.py --output results.json
     uv run python scripts/evaluate_smartbugs.py --bytecode-only
+    uv run python scripts/evaluate_smartbugs.py --tolerance 3
 """
 
 from __future__ import annotations
@@ -33,6 +34,7 @@ DATASET_DIR = Path(__file__).parent.parent / "smartbugs-curated" / "dataset" / "
 
 _PRAGMA_RE = re.compile(r"pragma solidity\s+[\^~>=<]*(\d+\.\d+\.\d+)")
 _VULN_LINES_RE = re.compile(r"@vulnerable_at_lines\s+([\d,\s]+)")
+_INLINE_MARKER_RE = re.compile(r"//\s*<yes>\s*(?:<report>\s*)?ACCESS_CONTROL")
 
 
 def detect_solc_version(source: str) -> str:
@@ -51,6 +53,20 @@ def parse_vulnerable_lines(source: str) -> list[int]:
     return [int(x.strip()) for x in m.group(1).split(",") if x.strip().isdigit()]
 
 
+def parse_inline_markers(source: str) -> list[int]:
+    """Parse // <yes> <report> ACCESS_CONTROL and // <yes> ACCESS_CONTROL inline markers.
+
+    Returns list of line numbers (1-based) where these markers appear.
+    These serve as additional ground truth annotations at the exact vulnerable line.
+    """
+    lines = source.splitlines()
+    result = []
+    for lineno, line in enumerate(lines, start=1):
+        if _INLINE_MARKER_RE.search(line):
+            result.append(lineno)
+    return result
+
+
 def evaluate_contract(
     sol_file: Path,
     detector: AccessControlDetector,
@@ -59,11 +75,13 @@ def evaluate_contract(
     source = sol_file.read_text(encoding="utf-8", errors="replace")
     version = detect_solc_version(source)
     vuln_lines = parse_vulnerable_lines(source)
+    inline_marker_lines = parse_inline_markers(source)
 
     result = {
         "file": sol_file.name,
         "solc_version": version,
         "vulnerable_lines": vuln_lines,
+        "inline_marker_lines": inline_marker_lines,
         "findings": [],
         "compile_error": None,
         "source_findings": 0,
@@ -103,11 +121,65 @@ def evaluate_contract(
             "contract": f.contract,
             "function": f.function,
             "confidence": f.confidence,
+            "location": {
+                "line_start": f.location.line_start if f.location else 0,
+            },
         }
         for f in all_findings
     ]
 
     return result
+
+
+def compute_line_metrics(
+    results: list[dict], tolerance: int = 5
+) -> dict:
+    """Compute TP/FP/FN/precision/recall/F1 across all results."""
+    tp = 0
+    fp = 0
+    fn = 0
+
+    for r in results:
+        if r.get("compile_error"):
+            continue
+
+        # Combine vulnerable_lines from both annotation styles
+        vuln_lines = set(r.get("vulnerable_lines", []))
+        vuln_lines.update(r.get("inline_marker_lines", []))
+
+        finding_lines = [
+            f["location"]["line_start"]
+            for f in r.get("findings", [])
+            if f.get("location") and f["location"].get("line_start", 0) > 0
+        ]
+
+        if not vuln_lines and not finding_lines:
+            continue
+
+        if not vuln_lines:
+            # All findings are FP
+            fp += len(finding_lines)
+            continue
+
+        # For each annotated line, check if any finding is within tolerance
+        matched_vuln = set()
+        matched_findings = set()
+
+        for vi, vl in enumerate(sorted(vuln_lines)):
+            for fi, fl in enumerate(finding_lines):
+                if abs(fl - vl) <= tolerance:
+                    matched_vuln.add(vi)
+                    matched_findings.add(fi)
+
+        tp += len(matched_vuln)
+        fn += len(vuln_lines) - len(matched_vuln)
+        fp += len(finding_lines) - len(matched_findings)
+
+    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+    recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+
+    return {"tp": tp, "fp": fp, "fn": fn, "precision": precision, "recall": recall, "f1": f1}
 
 
 def main():
@@ -117,6 +189,12 @@ def main():
     parser.add_argument("--output", "-o", help="Write results to JSON file")
     parser.add_argument(
         "--bytecode-only", action="store_true", help="Use bytecode analysis only"
+    )
+    parser.add_argument(
+        "--tolerance",
+        type=int,
+        default=5,
+        help="Line tolerance for matching findings to annotated vulnerable lines (default: 5)",
     )
     args = parser.parse_args()
 
@@ -169,6 +247,16 @@ def main():
         print(f"  True Positives (flagged known-vuln): {tp}")
         print(f"  False Negatives (missed known-vuln): {fn}")
         print(f"  Recall: {recall:.0%}")
+
+    # Line-level matching metrics
+    line_metrics = compute_line_metrics(results, tolerance=args.tolerance)
+    print(f"\nLine-level matching (tolerance={args.tolerance}):")
+    print(f"  True Positives:  {line_metrics['tp']}")
+    print(f"  False Positives: {line_metrics['fp']}")
+    print(f"  False Negatives: {line_metrics['fn']}")
+    print(f"  Precision: {line_metrics['precision']:.0%}")
+    print(f"  Recall:    {line_metrics['recall']:.0%}")
+    print(f"  F1:        {line_metrics['f1']:.3f}")
 
     if args.output:
         output_path = Path(args.output)
