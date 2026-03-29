@@ -128,18 +128,27 @@ def test_inherited_auth_no_findings(compiled_inherited_auth):
     contracts = analyze_source(compiled_inherited_auth)
     detector = AccessControlDetector()
     findings = detector.detect_from_source(contracts)
-    missing_auth = [f for f in findings if "missing" in f.title.lower() or "unguarded" in f.title.lower()]
-    assert not missing_auth, f"Unexpected findings for inherited auth: {[f.title for f in missing_auth]}"
+    missing_auth = [
+        f for f in findings if "missing" in f.title.lower() or "unguarded" in f.title.lower()
+    ]
+    assert not missing_auth, (
+        f"Unexpected findings for inherited auth: {[f.title for f in missing_auth]}"
+    )
 
 
 def test_oz_ownable_no_findings(compiled_oz_ownable):
     """Contract using well-known onlyOwner modifier should have no missing-auth findings."""
     from scanner.ast.analysis import analyze_source
+
     contracts = analyze_source(compiled_oz_ownable)
     detector = AccessControlDetector()
     findings = detector.detect_from_source(contracts)
-    missing_auth = [f for f in findings if "missing" in f.title.lower() or "unguarded" in f.title.lower()]
-    assert not missing_auth, f"Unexpected findings for OZ-style contract: {[f.title for f in missing_auth]}"
+    missing_auth = [
+        f for f in findings if "missing" in f.title.lower() or "unguarded" in f.title.lower()
+    ]
+    assert not missing_auth, (
+        f"Unexpected findings for OZ-style contract: {[f.title for f in missing_auth]}"
+    )
 
 
 def test_uninitialized_owner_finding(compiled_uninitialized_owner):
@@ -148,7 +157,11 @@ def test_uninitialized_owner_finding(compiled_uninitialized_owner):
     contracts = analyze_source(compiled_uninitialized_owner)
     detector = AccessControlDetector()
     findings = detector.detect_from_source(contracts)
-    uninit = [f for f in findings if "uninitializ" in f.title.lower() or "uninitializ" in f.description.lower()]
+    uninit = [
+        f
+        for f in findings
+        if "uninitializ" in f.title.lower() or "uninitializ" in f.description.lower()
+    ]
     assert uninit, f"Expected uninitialized owner finding, got: {[f.title for f in findings]}"
     assert uninit[0].severity == Severity.MEDIUM
 
@@ -159,7 +172,9 @@ def test_dangerous_renounce_finding(compiled_dangerous_renounce):
     contracts = analyze_source(compiled_dangerous_renounce)
     detector = AccessControlDetector()
     findings = detector.detect_from_source(contracts)
-    renounce = [f for f in findings if "renounce" in f.title.lower() or "renounce" in f.description.lower()]
+    renounce = [
+        f for f in findings if "renounce" in f.title.lower() or "renounce" in f.description.lower()
+    ]
     assert renounce, f"Expected renounce finding, got: {[f.title for f in findings]}"
     assert renounce[0].severity == Severity.LOW
 
@@ -170,7 +185,13 @@ def test_unguarded_role_grant_finding(compiled_unguarded_role_grant):
     contracts = analyze_source(compiled_unguarded_role_grant)
     detector = AccessControlDetector()
     findings = detector.detect_from_source(contracts)
-    role_findings = [f for f in findings if "role" in f.title.lower() or "grant" in f.title.lower() or "role" in f.description.lower()]
+    role_findings = [
+        f
+        for f in findings
+        if "role" in f.title.lower()
+        or "grant" in f.title.lower()
+        or "role" in f.description.lower()
+    ]
     assert role_findings, f"Expected role grant finding, got: {[f.title for f in findings]}"
     assert role_findings[0].severity == Severity.HIGH
 
@@ -182,4 +203,4 @@ def test_safe_contract_no_uninitialized_owner(compiled_safe_contract):
     detector = AccessControlDetector()
     findings = detector.detect_from_source(contracts)
     uninit = [f for f in findings if "uninitializ" in f.title.lower()]
-    assert not uninit, f"SafeContract should not have uninitialized owner finding"
+    assert not uninit, "SafeContract should not have uninitialized owner finding"

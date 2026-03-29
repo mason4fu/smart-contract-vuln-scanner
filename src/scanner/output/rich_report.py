@@ -38,7 +38,7 @@ def print_rich_findings(findings: list[Finding], source_texts: dict[str, str]) -
         console.print("[green]No findings.[/green]")
         return
 
-    for i, finding in enumerate(findings, 1):
+    for finding in findings:
         color = _SEVERITY_COLORS.get(finding.severity, "white")
 
         # Panel title: severity badge + finding title

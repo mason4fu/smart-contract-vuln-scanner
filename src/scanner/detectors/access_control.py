@@ -254,7 +254,10 @@ def _check_renounce_ownership(contract: ContractInfo) -> list[Finding]:
                 contract=contract.name,
                 function=renounce_func.name,
                 swc_id="SWC-106",
-                remediation="Use a two-step ownership transfer pattern with pendingOwner + acceptOwnership.",
+                remediation=(
+                    "Use a two-step ownership transfer pattern"
+                    " with pendingOwner + acceptOwnership."
+                ),
             )
         )
     return findings

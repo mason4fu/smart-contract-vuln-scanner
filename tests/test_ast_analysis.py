@@ -92,7 +92,9 @@ def test_line_numbers_not_byte_offsets(compiled_tx_origin_vuln):
     assert contracts, "Should find at least one contract"
     contract = contracts[0]
     # Find the withdraw function (or any function with a source location)
-    funcs_with_loc = [f for f in contract.functions if f.source_location and f.source_location.line_start > 0]
+    funcs_with_loc = [
+        f for f in contract.functions if f.source_location and f.source_location.line_start > 0
+    ]
     assert funcs_with_loc, "Should find functions with source locations"
     for func in funcs_with_loc:
         # Line numbers should be small (< 100 for our small test fixtures)

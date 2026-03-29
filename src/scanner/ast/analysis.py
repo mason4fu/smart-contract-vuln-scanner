@@ -11,7 +11,6 @@ from typing import Any
 
 from scanner.ast.loader import walk_ast, walk_ast_filtered
 from scanner.models.findings import SourceLocation
-from scanner.utils.source_map import build_line_map, offset_to_line_col
 from scanner.models.ir import (
     AuthCheck,
     ContractInfo,
@@ -19,6 +18,7 @@ from scanner.models.ir import (
     ModifierInfo,
     SensitiveAction,
 )
+from scanner.utils.source_map import build_line_map, offset_to_line_col
 
 # Well-known modifier names that imply auth/access control
 _KNOWN_AUTH_MODIFIERS: frozenset[str] = frozenset({
@@ -75,7 +75,8 @@ def analyze_source(compiler_output: dict[str, Any]) -> list[ContractInfo]:
         if not source_content:
             # Fallback: try reading the file from disk
             try:
-                source_content = open(source_file).read()
+                with open(source_file) as fh:
+                    source_content = fh.read()
             except OSError:
                 source_content = ""
         if source_content:
@@ -324,6 +325,29 @@ def _extract_function(
     )
 
 
+def _collect_inherited_modifiers(
+    base_names: list[str],
+    contract_map: dict[str, ContractInfo],
+) -> dict[str, ModifierInfo]:
+    """DFS-collect all ModifierInfo objects reachable from base_names."""
+    inherited: dict[str, ModifierInfo] = {}
+    visited: set[str] = set()
+    stack = list(base_names)
+    while stack:
+        name = stack.pop()
+        if name in visited:
+            continue
+        visited.add(name)
+        base = contract_map.get(name)
+        if base is None:
+            continue
+        for mod in base.modifiers:
+            if mod.name not in inherited:
+                inherited[mod.name] = mod
+        stack.extend(base.base_contracts)
+    return inherited
+
+
 def _resolve_inherited_modifiers(contracts: list[ContractInfo]) -> None:
     """Resolve modifiers inherited from base contracts (two-pass analysis).
 
@@ -339,24 +363,7 @@ def _resolve_inherited_modifiers(contracts: list[ContractInfo]) -> None:
             continue
 
         # Gather all inherited modifiers (DFS through base chains)
-        inherited_mods: dict[str, ModifierInfo] = {}
-        visited: set[str] = set()
-
-        def collect_modifiers(base_name: str) -> None:
-            if base_name in visited:
-                return
-            visited.add(base_name)
-            base = contract_map.get(base_name)
-            if base is None:
-                return
-            for mod in base.modifiers:
-                if mod.name not in inherited_mods:
-                    inherited_mods[mod.name] = mod
-            for grandbase in base.base_contracts:
-                collect_modifiers(grandbase)
-
-        for base_name in contract.base_contracts:
-            collect_modifiers(base_name)
+        inherited_mods = _collect_inherited_modifiers(contract.base_contracts, contract_map)
 
         if not inherited_mods:
             continue
@@ -574,9 +581,12 @@ def _constructor_assigns_variable(constructor_node: dict[str, Any], var_name: st
 def _state_var_has_initial_value(contract_node: dict[str, Any], var_name: str) -> bool:
     """Return True if var_name is declared with a non-null initialValue in the contract AST."""
     for child in contract_node.get("nodes", []):
-        if child.get("nodeType") == "VariableDeclaration" and child.get("name") == var_name:
-            if child.get("value") is not None or child.get("initialValue") is not None:
-                return True
+        if (
+            child.get("nodeType") == "VariableDeclaration"
+            and child.get("name") == var_name
+            and (child.get("value") is not None or child.get("initialValue") is not None)
+        ):
+            return True
     return False
 
 
