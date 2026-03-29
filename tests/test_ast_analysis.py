@@ -84,3 +84,20 @@ def test_owner_pattern_detected(compiled_safe_contract):
     contracts = analyze_source(compiled_safe_contract)
     contract = next(c for c in contracts if c.name == "SafeContract")
     assert contract.has_owner_pattern
+
+
+def test_line_numbers_not_byte_offsets(compiled_tx_origin_vuln):
+    """Verify that line_start contains actual line numbers, not byte offsets."""
+    contracts = analyze_source(compiled_tx_origin_vuln)
+    assert contracts, "Should find at least one contract"
+    contract = contracts[0]
+    # Find the withdraw function (or any function with a source location)
+    funcs_with_loc = [f for f in contract.functions if f.source_location and f.source_location.line_start > 0]
+    assert funcs_with_loc, "Should find functions with source locations"
+    for func in funcs_with_loc:
+        # Line numbers should be small (< 100 for our small test fixtures)
+        # not byte offsets (which would be hundreds or thousands)
+        assert func.source_location.line_start < 100, (
+            f"Function {func.name} has line_start={func.source_location.line_start}, "
+            f"expected a real line number < 100, not a byte offset"
+        )

@@ -11,6 +11,7 @@ from typing import Any
 
 from scanner.ast.loader import walk_ast, walk_ast_filtered
 from scanner.models.findings import SourceLocation
+from scanner.utils.source_map import build_line_map, offset_to_line_col
 from scanner.models.ir import (
     AuthCheck,
     ContractInfo,
@@ -50,28 +51,48 @@ def analyze_source(compiler_output: dict[str, Any]) -> list[ContractInfo]:
     from scanner.ast.loader import extract_ast
 
     asts = extract_ast(compiler_output)
+    # Source content may be embedded in the input sources (standard JSON input)
+    # or available on disk; use it to build accurate line maps.
+    input_sources: dict[str, Any] = compiler_output.get("sources", {})
     results: list[ContractInfo] = []
     for source_file, ast_root in asts.items():
-        contracts = _analyze_ast(ast_root, source_file)
+        # Try to get source content for accurate line numbers
+        line_map: list[int] | None = None
+        source_content: str = input_sources.get(source_file, {}).get("content", "")
+        if not source_content:
+            # Fallback: try reading the file from disk
+            try:
+                source_content = open(source_file).read()
+            except OSError:
+                source_content = ""
+        if source_content:
+            line_map = build_line_map(source_content)
+        contracts = _analyze_ast(ast_root, source_file, line_map=line_map)
         results.extend(contracts)
     return results
 
 
-def analyze_contract_ast(ast_root: dict[str, Any], source_file: str = "") -> list[ContractInfo]:
+def analyze_contract_ast(
+    ast_root: dict[str, Any], source_file: str = "", line_map: list[int] | None = None
+) -> list[ContractInfo]:
     """Analyze a single AST root and return ContractInfo objects."""
-    return _analyze_ast(ast_root, source_file)
+    return _analyze_ast(ast_root, source_file, line_map=line_map)
 
 
-def _analyze_ast(ast_root: dict[str, Any], source_file: str) -> list[ContractInfo]:
+def _analyze_ast(
+    ast_root: dict[str, Any], source_file: str, line_map: list[int] | None = None
+) -> list[ContractInfo]:
     results: list[ContractInfo] = []
     for node in walk_ast_filtered(ast_root, {"ContractDefinition"}):
         # Only top-level contract definitions (not nested)
-        contract = _extract_contract(node, source_file)
+        contract = _extract_contract(node, source_file, line_map=line_map)
         results.append(contract)
     return results
 
 
-def _extract_contract(node: dict[str, Any], source_file: str) -> ContractInfo:
+def _extract_contract(
+    node: dict[str, Any], source_file: str, line_map: list[int] | None = None
+) -> ContractInfo:
     name = node.get("name", "")
     contract_kind = node.get("contractKind", "contract")
     if contract_kind not in ("contract", "library", "interface", "abstract"):
@@ -96,7 +117,7 @@ def _extract_contract(node: dict[str, Any], source_file: str) -> ContractInfo:
 
     # Extract modifiers first (functions may reference them)
     modifier_nodes = [c for c in node.get("nodes", []) if c.get("nodeType") == "ModifierDefinition"]
-    modifiers = [_extract_modifier(m, source_file) for m in modifier_nodes]
+    modifiers = [_extract_modifier(m, source_file, line_map=line_map) for m in modifier_nodes]
     modifier_map = {m.name: m for m in modifiers}
 
     # Extract internal function definitions (for one-hop helper resolution)
@@ -105,17 +126,21 @@ def _extract_contract(node: dict[str, Any], source_file: str) -> ContractInfo:
         if child.get("nodeType") == "FunctionDefinition":
             vis = child.get("visibility", "internal")
             if vis in ("internal", "private"):
-                f = _extract_function(child, source_file, modifier_map, {}, state_variables)
+                f = _extract_function(
+                    child, source_file, modifier_map, {}, state_variables, line_map=line_map
+                )
                 internal_funcs[f.name] = f
 
     # Extract all functions
     functions: list[FunctionInfo] = []
     for child in node.get("nodes", []):
         if child.get("nodeType") == "FunctionDefinition":
-            f = _extract_function(child, source_file, modifier_map, internal_funcs, state_variables)
+            f = _extract_function(
+                child, source_file, modifier_map, internal_funcs, state_variables, line_map=line_map
+            )
             functions.append(f)
 
-    loc = _source_loc(node, source_file)
+    loc = _source_loc(node, source_file, line_map=line_map)
     return ContractInfo(
         name=name,
         source_file=source_file,
@@ -129,7 +154,9 @@ def _extract_contract(node: dict[str, Any], source_file: str) -> ContractInfo:
     )
 
 
-def _extract_modifier(node: dict[str, Any], source_file: str) -> ModifierInfo:
+def _extract_modifier(
+    node: dict[str, Any], source_file: str, line_map: list[int] | None = None
+) -> ModifierInfo:
     name = node.get("name", "")
     auth_checks: list[AuthCheck] = []
 
@@ -152,7 +179,7 @@ def _extract_modifier(node: dict[str, Any], source_file: str) -> ModifierInfo:
         name=name,
         has_auth_check=has_auth_check,
         auth_checks=auth_checks,
-        source_location=_source_loc(node, source_file),
+        source_location=_source_loc(node, source_file, line_map=line_map),
     )
 
 
@@ -162,6 +189,7 @@ def _extract_function(
     modifier_map: dict[str, ModifierInfo],
     internal_funcs: dict[str, FunctionInfo],
     state_variables: list[str],
+    line_map: list[int] | None = None,
 ) -> FunctionInfo:
     name = node.get("name", "")
     kind = node.get("kind", "function")  # function, constructor, fallback, receive
@@ -254,11 +282,13 @@ def _extract_function(
         sensitive_actions=sensitive_actions,
         has_auth_guard=has_auth_guard,
         uses_tx_origin=uses_tx_origin,
-        source_location=_source_loc(node, source_file),
+        source_location=_source_loc(node, source_file, line_map=line_map),
     )
 
 
-def _detect_auth_check_in_node(node: dict[str, Any]) -> AuthCheck | None:
+def _detect_auth_check_in_node(
+    node: dict[str, Any], source_file: str | None = None, line_map: list[int] | None = None
+) -> AuthCheck | None:
     """Return an AuthCheck if this node is a require/assert/if-revert with auth logic."""
     node_type = node.get("nodeType", "")
 
@@ -435,8 +465,14 @@ def _is_sensitive_by_name(func_name: str) -> bool:
     return bool(_SENSITIVE_FUNC_PATTERNS.search(func_name))
 
 
-def _source_loc(node: dict[str, Any], source_file: str) -> SourceLocation | None:
-    """Extract a SourceLocation from an AST node's src string."""
+def _source_loc(
+    node: dict[str, Any], source_file: str, line_map: list[int] | None = None
+) -> SourceLocation | None:
+    """Extract a SourceLocation from an AST node's src string.
+
+    If line_map is provided, converts byte offsets to real line/column numbers.
+    Otherwise, falls back to storing the raw byte offset in line_start.
+    """
     src = node.get("src", "")
     if not src:
         return None
@@ -444,7 +480,21 @@ def _source_loc(node: dict[str, Any], source_file: str) -> SourceLocation | None
         # src format: "offset:length:file_index"
         parts = src.split(":")
         if len(parts) >= 2:
-            return SourceLocation(file=source_file, line_start=int(parts[0]))
+            offset = int(parts[0])
+            length = int(parts[1])
+            if line_map is not None:
+                line_start, column_start, line_end, column_end = offset_to_line_col(
+                    offset, length, line_map
+                )
+                return SourceLocation(
+                    file=source_file,
+                    line_start=line_start,
+                    column_start=column_start,
+                    line_end=line_end,
+                    column_end=column_end,
+                )
+            # Fallback: store raw byte offset (legacy behavior)
+            return SourceLocation(file=source_file, line_start=offset)
     except (ValueError, IndexError):
         pass
     return SourceLocation(file=source_file, line_start=0)

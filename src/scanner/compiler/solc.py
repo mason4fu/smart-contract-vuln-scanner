@@ -83,6 +83,11 @@ def compile_source(
     }
 
     output = solcx.compile_standard(standard_input, solc_version=version)
+    # Inject source content into the output so downstream analysis can build
+    # accurate line maps without needing access to the original file path.
+    for fname, src_info in standard_input.get("sources", {}).items():
+        if fname in output.get("sources", {}) and "content" in src_info:
+            output["sources"][fname]["content"] = src_info["content"]
     return output
 
 
