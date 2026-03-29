@@ -101,3 +101,27 @@ def test_line_numbers_not_byte_offsets(compiled_tx_origin_vuln):
             f"Function {func.name} has line_start={func.source_location.line_start}, "
             f"expected a real line number < 100, not a byte offset"
         )
+
+
+def test_inherited_modifier_resolved(compiled_inherited_auth):
+    """Derived contract should inherit onlyOwner from base Ownable."""
+    contracts = analyze_source(compiled_inherited_auth)
+    derived = next((c for c in contracts if c.name == "InheritedAuth"), None)
+    assert derived is not None
+    # The derived contract should have at least the inherited modifier available
+    mod_names = {m.name for m in derived.modifiers}
+    assert "onlyOwner" in mod_names, f"Expected onlyOwner inherited, got {mod_names}"
+    # setValue should be guarded
+    set_val = next((f for f in derived.functions if f.name == "setValue"), None)
+    assert set_val is not None
+    assert set_val.has_auth_guard, "setValue should be guarded via inherited onlyOwner"
+
+
+def test_known_modifier_recognized(compiled_oz_ownable):
+    """onlyOwner in _KNOWN_AUTH_MODIFIERS should be recognized as auth guard."""
+    contracts = analyze_source(compiled_oz_ownable)
+    assert contracts
+    contract = contracts[0]
+    sensitive = next((f for f in contract.functions if f.name == "sensitiveOperation"), None)
+    assert sensitive is not None
+    assert sensitive.has_auth_guard, "sensitiveOperation with onlyOwner should be guarded"

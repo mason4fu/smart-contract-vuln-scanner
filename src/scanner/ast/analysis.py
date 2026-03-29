@@ -20,6 +20,19 @@ from scanner.models.ir import (
     SensitiveAction,
 )
 
+# Well-known modifier names that imply auth/access control
+_KNOWN_AUTH_MODIFIERS: frozenset[str] = frozenset({
+    "onlyOwner", "onlyAdmin", "onlyRole", "onlyGovernance",
+    "onlyMinter", "onlyPauser", "onlyOperator",
+    "whenNotPaused", "whenPaused",
+    "nonReentrant",
+})
+
+# Well-known base contracts that provide access control
+_KNOWN_AUTH_BASES: frozenset[str] = frozenset({
+    "Ownable", "AccessControl", "AccessControlEnumerable", "Pausable",
+})
+
 # Names that strongly suggest ownership / admin state variables
 _OWNER_VAR_PATTERNS = re.compile(
     r"^(_)?(owner|admin|governance|authority|controller|manager|minter|pauser|operator)s?$",
@@ -82,11 +95,14 @@ def analyze_contract_ast(
 def _analyze_ast(
     ast_root: dict[str, Any], source_file: str, line_map: list[int] | None = None
 ) -> list[ContractInfo]:
+    # Pass 1: Extract all contracts
     results: list[ContractInfo] = []
     for node in walk_ast_filtered(ast_root, {"ContractDefinition"}):
         # Only top-level contract definitions (not nested)
         contract = _extract_contract(node, source_file, line_map=line_map)
         results.append(contract)
+    # Pass 2: Resolve inherited modifiers
+    _resolve_inherited_modifiers(results)
     return results
 
 
@@ -114,6 +130,9 @@ def _extract_contract(
                 state_variables.append(var_name)
 
     has_owner_pattern = any(_is_owner_variable(v) for v in state_variables)
+    # If any base contract is a well-known auth base, treat as having owner pattern
+    if not has_owner_pattern and any(b in _KNOWN_AUTH_BASES for b in base_contracts):
+        has_owner_pattern = True
 
     # Extract modifiers first (functions may reference them)
     modifier_nodes = [c for c in node.get("nodes", []) if c.get("nodeType") == "ModifierDefinition"]
@@ -234,9 +253,10 @@ def _extract_function(
                     break
 
     # Compute has_auth_guard:
-    # 1. Any applied modifier with has_auth_check
+    # 1. Any applied modifier with has_auth_check, or a well-known auth modifier name
     modifier_guarded = any(
-        modifier_map.get(m, ModifierInfo(name=m)).has_auth_check for m in applied_modifiers
+        modifier_map.get(m, ModifierInfo(name=m)).has_auth_check or m in _KNOWN_AUTH_MODIFIERS
+        for m in applied_modifiers
     )
     # 2. Any inline require/if with msg.sender
     inline_guarded = any(ac.uses_msg_sender for ac in auth_checks)
@@ -284,6 +304,62 @@ def _extract_function(
         uses_tx_origin=uses_tx_origin,
         source_location=_source_loc(node, source_file, line_map=line_map),
     )
+
+
+def _resolve_inherited_modifiers(contracts: list[ContractInfo]) -> None:
+    """Resolve modifiers inherited from base contracts (two-pass analysis).
+
+    For each contract with base_contracts, find modifiers defined in the base
+    contracts and make them available in the derived contract. Then re-evaluate
+    has_auth_guard for functions that use those modifiers.
+    """
+    # Build name -> ContractInfo lookup
+    contract_map: dict[str, ContractInfo] = {c.name: c for c in contracts}
+
+    for contract in contracts:
+        if not contract.base_contracts:
+            continue
+
+        # Gather all inherited modifiers (DFS through base chains)
+        inherited_mods: dict[str, ModifierInfo] = {}
+        visited: set[str] = set()
+
+        def collect_modifiers(base_name: str) -> None:
+            if base_name in visited:
+                return
+            visited.add(base_name)
+            base = contract_map.get(base_name)
+            if base is None:
+                return
+            for mod in base.modifiers:
+                if mod.name not in inherited_mods:
+                    inherited_mods[mod.name] = mod
+            for grandbase in base.base_contracts:
+                collect_modifiers(grandbase)
+
+        for base_name in contract.base_contracts:
+            collect_modifiers(base_name)
+
+        if not inherited_mods:
+            continue
+
+        # Build the modifier map: local modifiers take precedence
+        local_mod_names = {m.name for m in contract.modifiers}
+        new_mods = [m for name, m in inherited_mods.items() if name not in local_mod_names]
+        contract.modifiers.extend(new_mods)
+
+        # Rebuild has_auth_guard for functions using inherited modifiers
+        modifier_map = {m.name: m for m in contract.modifiers}
+        for func in contract.functions:
+            if func.has_auth_guard:
+                continue  # already guarded
+            for mod_name in func.modifiers:
+                if mod_name in modifier_map and modifier_map[mod_name].has_auth_check:
+                    func.has_auth_guard = True
+                    break
+                if mod_name in _KNOWN_AUTH_MODIFIERS:
+                    func.has_auth_guard = True
+                    break
 
 
 def _detect_auth_check_in_node(

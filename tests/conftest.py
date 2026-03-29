@@ -55,3 +55,13 @@ def compiled_view_functions():
 @pytest.fixture(scope="session")
 def compiled_sensitive_actions():
     return compile_sol_fixture("SensitiveActions.sol")
+
+
+@pytest.fixture(scope="session")
+def compiled_inherited_auth():
+    return compile_sol_fixture("InheritedAuth.sol")
+
+
+@pytest.fixture(scope="session")
+def compiled_oz_ownable():
+    return compile_sol_fixture("OZOwnable.sol")

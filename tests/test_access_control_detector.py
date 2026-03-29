@@ -120,3 +120,23 @@ def test_get_all_detectors_includes_access_control():
     detectors = get_all_detectors()
     names = [d.name for d in detectors]
     assert "access-control" in names
+
+
+def test_inherited_auth_no_findings(compiled_inherited_auth):
+    """Contract with inherited onlyOwner should have no missing-auth findings."""
+    from scanner.ast.analysis import analyze_source
+    contracts = analyze_source(compiled_inherited_auth)
+    detector = AccessControlDetector()
+    findings = detector.detect_from_source(contracts)
+    missing_auth = [f for f in findings if "missing" in f.title.lower() or "unguarded" in f.title.lower()]
+    assert not missing_auth, f"Unexpected findings for inherited auth: {[f.title for f in missing_auth]}"
+
+
+def test_oz_ownable_no_findings(compiled_oz_ownable):
+    """Contract using well-known onlyOwner modifier should have no missing-auth findings."""
+    from scanner.ast.analysis import analyze_source
+    contracts = analyze_source(compiled_oz_ownable)
+    detector = AccessControlDetector()
+    findings = detector.detect_from_source(contracts)
+    missing_auth = [f for f in findings if "missing" in f.title.lower() or "unguarded" in f.title.lower()]
+    assert not missing_auth, f"Unexpected findings for OZ-style contract: {[f.title for f in missing_auth]}"
