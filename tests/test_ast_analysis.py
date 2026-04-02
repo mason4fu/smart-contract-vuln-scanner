@@ -65,6 +65,19 @@ def test_analyze_source_inline_auth_check(compiled_inline_auth_check):
     assert change_owner.has_auth_guard
 
 
+def test_analyze_source_inverted_balance_check(compiled_balance_check_inverted):
+    contracts = analyze_source(compiled_balance_check_inverted)
+    contract = next(c for c in contracts if c.name == "BalanceCheckInverted")
+
+    withdraw = next(f for f in contract.functions if f.name == "withdraw")
+    assert withdraw.auth_checks, "Expected a detected inline check"
+
+    auth_check = withdraw.auth_checks[0]
+    assert auth_check.comparison_operator == ">="
+    assert not auth_check.comparison_left_uses_sender_scoped_state
+    assert auth_check.comparison_right_uses_sender_scoped_state
+
+
 def test_analyze_source_view_functions(compiled_view_functions):
     contracts = analyze_source(compiled_view_functions)
     contract = next(c for c in contracts if c.name == "ViewFunctions")
@@ -127,3 +140,11 @@ def test_known_modifier_recognized(compiled_oz_ownable):
     sensitive = next((f for f in contract.functions if f.name == "sensitiveOperation"), None)
     assert sensitive is not None
     assert sensitive.has_auth_guard, "sensitiveOperation with onlyOwner should be guarded"
+
+
+def test_constructor_candidate_tagged(compiled_wrong_constructor_name):
+    contracts = analyze_source(compiled_wrong_constructor_name)
+    contract = next(c for c in contracts if c.name == "WrongConstructorName")
+    ctor_like = next(f for f in contract.functions if f.name == "Constructor")
+    assert not ctor_like.is_constructor
+    assert ctor_like.is_constructor_candidate

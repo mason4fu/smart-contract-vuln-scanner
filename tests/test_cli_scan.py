@@ -76,3 +76,50 @@ def test_cli_version():
     result = runner.invoke(app, ["--version"])
     assert result.exit_code == 0
     assert "scanner" in result.stdout
+
+
+def test_cli_scan_strict_access_control_filters_low_confidence(tmp_path):
+    result = runner.invoke(
+        app,
+        [
+            "scan",
+            str(FIXTURES_DIR / "BalanceCheckNotAuth.sol"),
+            "--format",
+            "text",
+            "--output",
+            str(tmp_path),
+            "--strict-access-control",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "No findings" in result.stdout
+
+
+def test_cli_scan_invalid_min_confidence():
+    result = runner.invoke(
+        app,
+        [
+            "scan",
+            str(FIXTURES_DIR / "TxOriginVuln.sol"),
+            "--min-confidence",
+            "invalid",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "Invalid --min-confidence" in result.stdout
+
+
+def test_cli_scan_suppresses_bytecode_duplicate_for_source_swc():
+    result = runner.invoke(
+        app,
+        [
+            "scan",
+            str(FIXTURES_DIR / "TxOriginVuln.sol"),
+            "--format",
+            "text",
+        ],
+    )
+    assert result.exit_code == 0
+    out = result.stdout.lower()
+    assert "tx.origin used for authorization" in out
+    assert "tx.origin used (bytecode)" not in out

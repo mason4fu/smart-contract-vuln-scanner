@@ -23,26 +23,17 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 import scanner.detectors.access_control  # noqa: F401 - register detector
-
 from scanner.ast.analysis import analyze_source
 from scanner.bytecode.loader import extract_bytecode
 from scanner.compiler.solc import compile_source, ensure_solc
 from scanner.detectors.access_control import AccessControlDetector
+from scanner.evaluation.common import compute_prf, detect_solc_version
 from scanner.models.findings import Finding
 
 DATASET_DIR = Path(__file__).parent.parent / "smartbugs-curated" / "dataset" / "access_control"
 
-_PRAGMA_RE = re.compile(r"pragma solidity\s+[\^~>=<]*(\d+\.\d+\.\d+)")
 _VULN_LINES_RE = re.compile(r"@vulnerable_at_lines\s+([\d,\s]+)")
 _INLINE_MARKER_RE = re.compile(r"//\s*<yes>\s*(?:<report>\s*)?ACCESS_CONTROL")
-
-
-def detect_solc_version(source: str) -> str:
-    """Extract solc version from pragma statement."""
-    m = _PRAGMA_RE.search(source)
-    if m:
-        return m.group(1)
-    return "0.4.25"  # safe fallback for old SmartBugs contracts
 
 
 def parse_vulnerable_lines(source: str) -> list[int]:
@@ -131,9 +122,7 @@ def evaluate_contract(
     return result
 
 
-def compute_line_metrics(
-    results: list[dict], tolerance: int = 5
-) -> dict:
+def compute_line_metrics(results: list[dict], tolerance: int = 5) -> dict:
     """Compute TP/FP/FN/precision/recall/F1 across all results."""
     tp = 0
     fp = 0
@@ -175,11 +164,7 @@ def compute_line_metrics(
         fn += len(vuln_lines) - len(matched_vuln)
         fp += len(finding_lines) - len(matched_findings)
 
-    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-    recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
-
-    return {"tp": tp, "fp": fp, "fn": fn, "precision": precision, "recall": recall, "f1": f1}
+    return compute_prf(tp=tp, fp=fp, fn=fn)
 
 
 def main():
@@ -187,9 +172,7 @@ def main():
         description="Evaluate access control detector on SmartBugs dataset"
     )
     parser.add_argument("--output", "-o", help="Write results to JSON file")
-    parser.add_argument(
-        "--bytecode-only", action="store_true", help="Use bytecode analysis only"
-    )
+    parser.add_argument("--bytecode-only", action="store_true", help="Use bytecode analysis only")
     parser.add_argument(
         "--tolerance",
         type=int,

@@ -21,6 +21,14 @@ class ScannerConfig(BaseSettings):
     )
     output_dir: Path = Field(default=Path("reports"), description="Directory for analysis output.")
     log_level: str = Field(default="INFO", description="Logging verbosity.")
+    min_confidence: str = Field(
+        default="low",
+        description="Minimum confidence to include findings: low, medium, high.",
+    )
+    strict_access_control: bool = Field(
+        default=False,
+        description="If true, prefer high-confidence access-control findings.",
+    )
 
 
 def load_config(**overrides: object) -> ScannerConfig:

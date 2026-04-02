@@ -1,4 +1,5 @@
 """Rich panel-based CLI output for scanner findings."""
+
 from __future__ import annotations
 
 from collections import Counter

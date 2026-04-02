@@ -1,18 +1,19 @@
 """Evaluate access control detector against Not-So-Smart-Contracts dataset."""
+
 from __future__ import annotations
 
 import argparse
 import json
-import re
 import sys
 from pathlib import Path
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from scanner.compiler.solc import compile_source, ensure_solc
 from scanner.ast.analysis import analyze_source
+from scanner.compiler.solc import compile_source, ensure_solc
 from scanner.detectors.access_control import AccessControlDetector
+from scanner.evaluation.common import compute_prf, detect_solc_version
 
 DATASET_DIR = Path(__file__).parent.parent / "datasets" / "not-so-smart-contracts"
 
@@ -33,37 +34,10 @@ GROUND_TRUTH: dict[str, dict] = {
 }
 
 
-def detect_solc_version(source: str) -> str:
-    """Extract solc version from pragma statement.
-
-    For caret/range pragmas (e.g. ^0.4.15) we pick a known-good released
-    compiler that satisfies the constraint rather than the exact pinned version,
-    which may not be available as a release build.
-    """
-    # Check for a caret/tilde/range pragma and resolve to a safe released version
-    caret_m = re.search(r'pragma solidity\s+[\^~>=<]+(\d+)\.(\d+)\.(\d+)', source)
-    if caret_m:
-        major, minor = int(caret_m.group(1)), int(caret_m.group(2))
-        if major == 0 and minor <= 4:
-            return "0.4.25"
-        if major == 0 and minor == 5:
-            return "0.5.17"
-        if major == 0 and minor == 6:
-            return "0.6.12"
-        if major == 0 and minor == 7:
-            return "0.7.6"
-
-    # Exact version pin
-    m = re.search(r'pragma solidity\s+[\^~>=<]*(\d+\.\d+\.\d+)', source)
-    if m:
-        return m.group(1)
-    return "0.4.25"
-
-
 def evaluate_contract(sol_file: Path, detector: AccessControlDetector) -> dict:
     """Evaluate a single contract file."""
     source = sol_file.read_text(encoding="utf-8")
-    solc_version = detect_solc_version(source)
+    solc_version = detect_solc_version(source, resolve_ranges=True)
     result: dict = {
         "file": sol_file.name,
         "solc_version": solc_version,
@@ -115,11 +89,7 @@ def compute_function_metrics(results: list[dict]) -> dict:
         fn += len(vuln_funcs - matched)
         fp += len(found_funcs - vuln_funcs)
 
-    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-    recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
-
-    return {"tp": tp, "fp": fp, "fn": fn, "precision": precision, "recall": recall, "f1": f1}
+    return compute_prf(tp=tp, fp=fp, fn=fn)
 
 
 def main() -> None:
@@ -149,7 +119,7 @@ def main() -> None:
         r = evaluate_contract(sol_file, detector)
         results.append(r)
         if r.get("compile_error"):
-            print(f"COMPILE ERROR")
+            print("COMPILE ERROR")
         else:
             print(f"OK - {len(r['findings'])} finding(s)")
 
@@ -157,13 +127,13 @@ def main() -> None:
     print("-" * 60)
 
     compiled = [r for r in results if not r.get("compile_error")]
-    print(f"Results:")
+    print("Results:")
     print(f"  Compiled successfully: {len(compiled)}/{len(results)}")
     print(f"  Total findings: {sum(len(r['findings']) for r in compiled)}")
 
     metrics = compute_function_metrics(results)
     print()
-    print(f"Function-level matching:")
+    print("Function-level matching:")
     print(f"  True Positives:  {metrics['tp']}")
     print(f"  False Positives: {metrics['fp']}")
     print(f"  False Negatives: {metrics['fn']}")

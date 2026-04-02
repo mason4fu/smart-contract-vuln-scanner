@@ -15,6 +15,9 @@ def test_auth_check_defaults():
     assert ac.kind == "require"
     assert not ac.uses_msg_sender
     assert not ac.uses_tx_origin
+    assert ac.comparison_operator == ""
+    assert not ac.comparison_left_uses_sender_scoped_state
+    assert not ac.comparison_right_uses_sender_scoped_state
 
 
 def test_auth_check_with_location():

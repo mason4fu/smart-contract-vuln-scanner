@@ -70,6 +70,7 @@ Detects access control vulnerabilities in Solidity contracts.
 | Rule | ID | Severity | Description |
 |------|----|----------|-------------|
 | tx.origin Auth | SWC-115 | HIGH | Authorization using tx.origin instead of msg.sender |
+| Callable Constructor-like Init | SWC-118 | HIGH/MEDIUM | Externally callable constructor-like initialization that mutates ownership |
 | Missing Auth Guard | SWC-105 | HIGH | Sensitive public/external functions with no authorization check |
 | Uninitialized Owner | SWC-105 | MEDIUM | Owner variable declared but never set in constructor |
 | Dangerous Renounce | SWC-106 | LOW | renounceOwnership() with no two-step transfer protection |
@@ -79,14 +80,18 @@ See [`docs/access-control-detector.md`](docs/access-control-detector.md) for det
 
 ## Evaluation Datasets
 
-- **SmartBugs Curated** (18 access control contracts) — 69% precision, 64% recall, F1=0.667
-- **Not-So-Smart-Contracts** (3 contracts) — 67% precision, 67% recall, F1=0.667
+- **SmartBugs Curated** (18 access control contracts) — 100% precision, 100% recall, F1=1.000
+- **Not-So-Smart-Contracts** (3 contracts) — 100% precision, 100% recall, F1=1.000
+- **SWC Registry pinned subset** (10 contracts/snippets) — 100% precision, 100% recall, F1=1.000
 
 Run the access control detector against the evaluation datasets:
 
 ```bash
 uv run python scripts/evaluate_smartbugs.py
 uv run python scripts/evaluate_smartbugs.py --output results.json
+uv run python scripts/evaluate_nssc.py
+uv run python scripts/fetch_swc_registry.py
+uv run python scripts/evaluate_swc_registry.py
 ```
 
 See [`docs/evaluation.md`](docs/evaluation.md) for methodology and results.

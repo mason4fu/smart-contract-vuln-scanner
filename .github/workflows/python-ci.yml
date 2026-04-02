@@ -26,10 +26,22 @@ jobs:
         run: uv sync
 
       - name: Lint
-        run: uv run ruff check src/ tests/
+        run: uv run ruff check src/ tests/ scripts/
 
       - name: Format check
         run: uv run ruff format --check src/ tests/
 
       - name: Run tests
         run: uv run pytest
+
+      - name: Fetch SWC Registry Subset
+        run: uv run python scripts/fetch_swc_registry.py
+
+      - name: Evaluate SWC Registry Subset
+        run: uv run python scripts/evaluate_swc_registry.py
+
+      - name: OOD Access-Control Guardrail
+        run: uv run python scripts/check_ood_access_control.py --max-hit-rate 0.60
+
+      - name: Pareto Metric Gate
+        run: uv run python scripts/check_pareto_gate.py --baseline scripts/metrics_baseline.json --max-ood-hit-rate 0.60

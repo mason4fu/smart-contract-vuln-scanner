@@ -21,6 +21,55 @@ app = typer.Typer(
 
 console = Console()
 
+_CONFIDENCE_RANK = {"low": 0, "medium": 1, "high": 2}
+
+
+def _deduplicate_findings(all_findings):
+    """Deduplicate findings by detector/title/contract/function tuple."""
+    seen: set[tuple] = set()
+    unique_findings = []
+    for finding in all_findings:
+        key = (finding.detector, finding.title, finding.contract, finding.function)
+        if key not in seen:
+            seen.add(key)
+            unique_findings.append(finding)
+    return unique_findings
+
+
+def _suppress_bytecode_duplicates(unique_findings):
+    """Prefer source findings over bytecode hints for the same contract+SWC."""
+    source_swc_keys = {
+        (finding.contract, finding.swc_id)
+        for finding in unique_findings
+        if finding.location is not None and finding.contract and finding.swc_id
+    }
+    return [
+        finding
+        for finding in unique_findings
+        if not (
+            "(bytecode)" in finding.title.lower()
+            and finding.contract
+            and finding.swc_id
+            and (finding.contract, finding.swc_id) in source_swc_keys
+        )
+    ]
+
+
+def _resolve_min_confidence(min_confidence: str, cfg, strict_access_control: bool) -> str:
+    effective_min_conf = min_confidence.lower() if min_confidence else cfg.min_confidence.lower()
+    if strict_access_control or cfg.strict_access_control:
+        return "high"
+    return effective_min_conf
+
+
+def _filter_by_confidence(unique_findings, min_confidence: str):
+    threshold = _CONFIDENCE_RANK[min_confidence]
+    return [
+        finding
+        for finding in unique_findings
+        if _CONFIDENCE_RANK.get(str(finding.confidence).lower(), 0) >= threshold
+    ]
+
 
 @app.callback(invoke_without_command=True)
 def main(
@@ -63,6 +112,20 @@ def scan(
         str,
         typer.Option("--solc-version", help="Solidity compiler version."),
     ] = "0.8.28",
+    min_confidence: Annotated[
+        str,
+        typer.Option(
+            "--min-confidence",
+            help="Minimum confidence to report: low, medium, high.",
+        ),
+    ] = "",
+    strict_access_control: Annotated[
+        bool,
+        typer.Option(
+            "--strict-access-control",
+            help="Prefer high-confidence access-control findings.",
+        ),
+    ] = False,
 ) -> None:
     """Run vulnerability scan on a Solidity contract or directory.
 
@@ -77,10 +140,18 @@ def scan(
     from scanner.ast.analysis import analyze_source
     from scanner.bytecode.loader import extract_bytecode
     from scanner.compiler.solc import compile_source, load_compiler_output
+    from scanner.config import load_config
     from scanner.detectors import get_all_detectors
     from scanner.models.findings import Finding
     from scanner.output.report import write_report
     from scanner.output.rich_report import print_rich_findings
+
+    cfg = load_config(
+        output_dir=output,
+        solc_version=solc_version,
+        min_confidence=min_confidence or "low",
+        strict_access_control=strict_access_control,
+    )
 
     if not target.exists():
         console.print(f"[red]Error: target not found: {target}[/red]")
@@ -189,14 +260,19 @@ def scan(
         for det in detector_instances:
             all_findings.extend(det.detect_from_bytecode([bc]))
 
-    # --- Deduplicate findings ---
-    seen: set[tuple] = set()
-    unique_findings: list[Finding] = []
-    for f in all_findings:
-        key = (f.detector, f.title, f.contract, f.function)
-        if key not in seen:
-            seen.add(key)
-            unique_findings.append(f)
+    # --- Deduplicate and filter findings ---
+    unique_findings = _deduplicate_findings(all_findings)
+    unique_findings = _suppress_bytecode_duplicates(unique_findings)
+
+    effective_min_conf = _resolve_min_confidence(min_confidence, cfg, strict_access_control)
+    if effective_min_conf not in _CONFIDENCE_RANK:
+        console.print(
+            f"[red]Invalid --min-confidence '{effective_min_conf}'. "
+            "Expected one of: low, medium, high.[/red]"
+        )
+        raise typer.Exit(1)
+
+    unique_findings = _filter_by_confidence(unique_findings, effective_min_conf)
 
     # --- Print summary ---
     print_rich_findings(unique_findings, source_texts)

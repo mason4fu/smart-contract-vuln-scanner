@@ -21,33 +21,63 @@ from scanner.models.ir import (
 from scanner.utils.source_map import build_line_map, offset_to_line_col
 
 # Well-known modifier names that imply auth/access control
-_KNOWN_AUTH_MODIFIERS: frozenset[str] = frozenset({
-    "onlyOwner", "onlyAdmin", "onlyRole", "onlyGovernance",
-    "onlyMinter", "onlyPauser", "onlyOperator",
-    "whenNotPaused", "whenPaused",
-    "nonReentrant",
-})
+_KNOWN_AUTH_MODIFIERS: frozenset[str] = frozenset(
+    {
+        "onlyOwner",
+        "onlyAdmin",
+        "onlyRole",
+        "onlyGovernance",
+        "onlyMinter",
+        "onlyPauser",
+        "onlyOperator",
+    }
+)
 
 # Well-known base contracts that provide access control
-_KNOWN_AUTH_BASES: frozenset[str] = frozenset({
-    "Ownable", "AccessControl", "AccessControlEnumerable", "Pausable",
-})
+_KNOWN_AUTH_BASES: frozenset[str] = frozenset(
+    {
+        "Ownable",
+        "AccessControl",
+        "AccessControlEnumerable",
+    }
+)
 
 # Names that strongly suggest ownership / admin state variables
 _OWNER_VAR_PATTERNS = re.compile(
-    r"^(_)?(owner|admin|governance|authority|controller|manager|minter|pauser|operator)s?$",
+    r"^(_)?(owner|admin|governance|authority|controller|manager|minter|pauser|operator|creator|root)s?$",
     re.IGNORECASE,
 )
 
-# Function name patterns that suggest sensitive operations
-_SENSITIVE_FUNC_PATTERNS = re.compile(
-    r"(owner|admin|role|pause|unpause|upgrade|proxy|withdraw|transfer|mint|burn|"
-    r"kill|destroy|suicide|selfdestruct|set[A-Z_]|grant|revoke|initialize|migrate)",
+# Function names that are strongly associated with privileged control surface.
+_HIGH_CONF_SENSITIVE_FUNC_PATTERNS = re.compile(
+    r"(owner|admin|role|pause|unpause|upgrade|proxy|kill|destroy|suicide|"
+    r"selfdestruct|grant|revoke|initialize|migrate|renounce)",
+    re.IGNORECASE,
 )
+
+# Lower-confidence names that can be business-flow operations unless paired with
+# privileged context.
+_LOW_CONF_SENSITIVE_FUNC_PATTERNS = re.compile(
+    r"(withdraw|transfer|mint|burn|set[a-zA-Z_]|init[a-zA-Z_])",
+    re.IGNORECASE,
+)
+
+_PRIVILEGED_NAME_CONTEXT = re.compile(
+    r"(owner|admin|role|governance|authority|controller|manager|minter|pauser|"
+    r"operator|creator|root)",
+    re.IGNORECASE,
+)
+
+_CONSTRUCTOR_CANDIDATE_PATTERNS = re.compile(
+    r"^(constructor|construct|init|initialize|initializer|setup)",
+    re.IGNORECASE,
+)
+
+_COMPARISON_OPERATORS: frozenset[str] = frozenset({"==", "!=", ">", ">=", "<", "<="})
 
 # Role / access mapping variable names
 _ROLE_VAR_PATTERNS = re.compile(
-    r"(role|permission|access|whitelist|blacklist|allowed)",
+    r"(role|permission|access|whitelist|blacklist|allowed|admin)",
     re.IGNORECASE,
 )
 
@@ -137,31 +167,47 @@ def _extract_contract(
 
     # Extract modifiers first (functions may reference them)
     modifier_nodes = [c for c in node.get("nodes", []) if c.get("nodeType") == "ModifierDefinition"]
-    modifiers = [_extract_modifier(m, source_file, line_map=line_map) for m in modifier_nodes]
+    modifiers = [
+        _extract_modifier(m, source_file, state_variables, line_map=line_map)
+        for m in modifier_nodes
+    ]
     modifier_map = {m.name: m for m in modifiers}
+
+    def build_function(
+        child: dict[str, Any],
+        helper_map: dict[str, FunctionInfo],
+    ) -> FunctionInfo:
+        return _extract_function(
+            child,
+            name,
+            source_file,
+            modifier_map,
+            helper_map,
+            state_variables,
+            has_owner_pattern,
+            line_map=line_map,
+        )
+
+    function_nodes = [
+        child for child in node.get("nodes", []) if child.get("nodeType") == "FunctionDefinition"
+    ]
 
     # Extract internal function definitions (for one-hop helper resolution)
     internal_funcs: dict[str, FunctionInfo] = {}
-    for child in node.get("nodes", []):
-        if child.get("nodeType") == "FunctionDefinition":
-            vis = child.get("visibility", "internal")
-            if vis in ("internal", "private"):
-                f = _extract_function(
-                    child, source_file, modifier_map, {}, state_variables, line_map=line_map
-                )
-                internal_funcs[f.name] = f
+    for child in function_nodes:
+        vis = child.get("visibility", "internal")
+        if vis in ("internal", "private"):
+            f = build_function(child, {})
+            internal_funcs[f.name] = f
 
     # Extract all functions
     functions: list[FunctionInfo] = []
     constructor_node: dict[str, Any] | None = None
-    for child in node.get("nodes", []):
-        if child.get("nodeType") == "FunctionDefinition":
-            f = _extract_function(
-                child, source_file, modifier_map, internal_funcs, state_variables, line_map=line_map
-            )
-            functions.append(f)
-            if child.get("kind") == "constructor":
-                constructor_node = child
+    for child in function_nodes:
+        f = build_function(child, internal_funcs)
+        functions.append(f)
+        if child.get("kind") == "constructor" or bool(child.get("isConstructor", False)):
+            constructor_node = child
 
     # Detect whether any owner-like state variable is initialized
     owner_initialized_in_constructor = False
@@ -193,17 +239,24 @@ def _extract_contract(
 
 
 def _extract_modifier(
-    node: dict[str, Any], source_file: str, line_map: list[int] | None = None
+    node: dict[str, Any],
+    source_file: str,
+    state_variables: list[str],
+    line_map: list[int] | None = None,
 ) -> ModifierInfo:
     name = node.get("name", "")
     auth_checks: list[AuthCheck] = []
+    called_functions: set[str] = set()
 
     body = node.get("body", {})
     if body:
         for stmt in walk_ast(body):
-            ac = _detect_auth_check_in_node(stmt)
+            ac = _detect_auth_check_in_node(stmt, state_variables)
             if ac:
                 auth_checks.append(ac)
+            callee = _callee_name(stmt)
+            if callee:
+                called_functions.add(callee)
 
     has_auth_check = bool(auth_checks)
     # A modifier that uses msg.sender counts as an auth check
@@ -217,24 +270,29 @@ def _extract_modifier(
         name=name,
         has_auth_check=has_auth_check,
         auth_checks=auth_checks,
+        called_functions=sorted(called_functions),
         source_location=_source_loc(node, source_file, line_map=line_map),
     )
 
 
 def _extract_function(
     node: dict[str, Any],
+    contract_name: str,
     source_file: str,
     modifier_map: dict[str, ModifierInfo],
     internal_funcs: dict[str, FunctionInfo],
     state_variables: list[str],
+    has_owner_pattern: bool,
     line_map: list[int] | None = None,
 ) -> FunctionInfo:
     name = node.get("name", "")
     kind = node.get("kind", "function")  # function, constructor, fallback, receive
 
-    is_constructor = kind == "constructor"
-    is_fallback = kind == "fallback"
-    is_receive = kind == "receive"
+    # Legacy Solidity ASTs may expose boolean flags instead of kind values.
+    is_constructor = kind == "constructor" or bool(node.get("isConstructor", False))
+    is_fallback = kind == "fallback" or bool(node.get("isFallback", False))
+    is_receive = kind == "receive" or bool(node.get("isReceiveEther", False))
+    is_constructor_candidate = _is_constructor_candidate_name(contract_name, name, is_constructor)
 
     visibility = node.get("visibility", "internal")
     state_mutability = node.get("stateMutability", "nonpayable")
@@ -250,19 +308,24 @@ def _extract_function(
     auth_checks: list[AuthCheck] = []
     sensitive_actions: list[SensitiveAction] = []
     uses_tx_origin = False
+    called_functions: set[str] = set()
 
     body = node.get("body", {})
     if body:
         all_nodes = walk_ast(body)
         for stmt in all_nodes:
-            ac = _detect_auth_check_in_node(stmt)
+            ac = _detect_auth_check_in_node(stmt, state_variables)
             if ac:
                 auth_checks.append(ac)
                 if ac.uses_tx_origin:
                     uses_tx_origin = True
             sa = _detect_sensitive_action(stmt, state_variables)
             if sa:
+                sa.source_location = _source_loc(stmt, source_file, line_map=line_map)
                 sensitive_actions.append(sa)
+            callee = _callee_name(stmt)
+            if callee:
+                called_functions.add(callee)
 
         # Check for tx.origin anywhere in the body
         if not uses_tx_origin:
@@ -277,30 +340,34 @@ def _extract_function(
         modifier_map.get(m, ModifierInfo(name=m)).has_auth_check or m in _KNOWN_AUTH_MODIFIERS
         for m in applied_modifiers
     )
+    modifier_helper_guarded = _modifier_calls_guarded_helper(
+        applied_modifiers,
+        modifier_map,
+        internal_funcs,
+        depth=2,
+    )
     # 2. Any inline require/if with msg.sender
-    inline_guarded = any(ac.uses_msg_sender for ac in auth_checks)
-    # 3. One-hop: calls internal function that has inline auth
-    one_hop_guarded = False
-    if not modifier_guarded and not inline_guarded and body:
-        for stmt in walk_ast(body):
-            if stmt.get("nodeType") == "FunctionCall":
-                expr = stmt.get("expression", {})
-                callee = expr.get("name", "") or expr.get("memberName", "")
-                if callee in internal_funcs:
-                    helper = internal_funcs[callee]
-                    if any(ac.uses_msg_sender for ac in helper.auth_checks):
-                        one_hop_guarded = True
-                        break
+    inline_guarded = any(_auth_check_is_guard(ac) for ac in auth_checks)
+    # 3. Bounded helper-call auth propagation through internal functions.
+    helper_guarded = _has_guarded_helper_path(called_functions, internal_funcs, depth=2)
 
-    has_auth_guard = modifier_guarded or inline_guarded or one_hop_guarded
+    has_auth_guard = modifier_guarded or modifier_helper_guarded or inline_guarded or helper_guarded
+    has_sender_flow_check = any(
+        ac.uses_msg_sender
+        and not ac.uses_tx_origin
+        and not ac.references_owner
+        and not ac.references_role
+        for ac in auth_checks
+    )
 
     # Classify function sensitivity by name if no body actions found
     if (
         not sensitive_actions
+        and has_owner_pattern
         and not is_constructor
         and not is_fallback
         and not is_receive
-        and _is_sensitive_by_name(name)
+        and _is_sensitive_name_with_context(name)
     ):
         sensitive_actions.append(
             SensitiveAction(
@@ -314,6 +381,7 @@ def _extract_function(
         visibility=visibility,  # type: ignore[arg-type]
         state_mutability=state_mutability,  # type: ignore[arg-type]
         is_constructor=is_constructor,
+        is_constructor_candidate=is_constructor_candidate,
         is_fallback=is_fallback,
         is_receive=is_receive,
         modifiers=applied_modifiers,
@@ -322,7 +390,66 @@ def _extract_function(
         has_auth_guard=has_auth_guard,
         uses_tx_origin=uses_tx_origin,
         source_location=_source_loc(node, source_file, line_map=line_map),
+        extra={
+            "called_functions": sorted(called_functions),
+            "has_sender_flow_check": has_sender_flow_check,
+        },
     )
+
+
+def _auth_check_is_guard(auth_check: AuthCheck) -> bool:
+    """Return True for auth checks that gate privileged access.
+
+    We treat tx.origin checks as an authorization guard signal even though they
+    are insecure, to avoid also misclassifying the function as "missing auth".
+    """
+    return auth_check.uses_tx_origin or (
+        auth_check.uses_msg_sender and (auth_check.references_owner or auth_check.references_role)
+    )
+
+
+def _has_guarded_helper_path(
+    callees: set[str] | list[str],
+    internal_funcs: dict[str, FunctionInfo],
+    depth: int,
+    visited: set[str] | None = None,
+) -> bool:
+    """Bounded DFS through internal call graph to detect propagated auth guards."""
+    if depth <= 0:
+        return False
+    if visited is None:
+        visited = set()
+
+    for callee in callees:
+        if callee in visited or callee not in internal_funcs:
+            continue
+        visited.add(callee)
+        helper = internal_funcs[callee]
+
+        if any(_auth_check_is_guard(ac) for ac in helper.auth_checks):
+            return True
+
+        nested = helper.extra.get("called_functions", []) if helper.extra else []
+        if nested and _has_guarded_helper_path(nested, internal_funcs, depth - 1, visited):
+            return True
+
+    return False
+
+
+def _modifier_calls_guarded_helper(
+    modifier_names: list[str],
+    modifier_map: dict[str, ModifierInfo],
+    internal_funcs: dict[str, FunctionInfo],
+    depth: int,
+) -> bool:
+    """Return True when any applied modifier calls helper auth logic."""
+    for mod_name in modifier_names:
+        mod = modifier_map.get(mod_name)
+        if mod is None or not mod.called_functions:
+            continue
+        if _has_guarded_helper_path(set(mod.called_functions), internal_funcs, depth=depth):
+            return True
+    return False
 
 
 def _collect_inherited_modifiers(
@@ -375,6 +502,9 @@ def _resolve_inherited_modifiers(contracts: list[ContractInfo]) -> None:
 
         # Rebuild has_auth_guard for functions using inherited modifiers
         modifier_map = {m.name: m for m in contract.modifiers}
+        internal_funcs = {
+            f.name: f for f in contract.functions if f.visibility in ("internal", "private")
+        }
         for func in contract.functions:
             if func.has_auth_guard:
                 continue  # already guarded
@@ -385,13 +515,21 @@ def _resolve_inherited_modifiers(contracts: list[ContractInfo]) -> None:
                 if mod_name in _KNOWN_AUTH_MODIFIERS:
                     func.has_auth_guard = True
                     break
+                if _modifier_calls_guarded_helper(
+                    [mod_name], modifier_map, internal_funcs, depth=2
+                ):
+                    func.has_auth_guard = True
+                    break
 
 
 def _detect_auth_check_in_node(
-    node: dict[str, Any], source_file: str | None = None, line_map: list[int] | None = None
+    node: dict[str, Any],
+    state_variables: list[str] | None = None,
 ) -> AuthCheck | None:
     """Return an AuthCheck if this node is a require/assert/if-revert with auth logic."""
     node_type = node.get("nodeType", "")
+
+    state_variables = state_variables or []
 
     if node_type == "FunctionCall":
         expr = node.get("expression", {})
@@ -404,6 +542,9 @@ def _detect_auth_check_in_node(
                 uses_tx = _node_uses_tx_origin(condition)
                 refs_owner = _node_references_owner(condition)
                 refs_role = _node_references_role(condition)
+                comparison_operator, left_sender_state, right_sender_state = _comparison_metadata(
+                    condition, state_variables
+                )
                 if uses_ms or uses_tx or refs_owner or refs_role:
                     kind: str = "require" if func_name == "require" else "assert"
                     return AuthCheck(
@@ -412,6 +553,9 @@ def _detect_auth_check_in_node(
                         uses_tx_origin=uses_tx,
                         references_owner=refs_owner,
                         references_role=refs_role,
+                        comparison_operator=comparison_operator,
+                        comparison_left_uses_sender_scoped_state=left_sender_state,
+                        comparison_right_uses_sender_scoped_state=right_sender_state,
                         raw_expression=str(condition.get("nodeType", "")),
                     )
 
@@ -420,6 +564,9 @@ def _detect_auth_check_in_node(
         uses_ms = _node_uses_msg_sender(condition)
         uses_tx = _node_uses_tx_origin(condition)
         refs_owner = _node_references_owner(condition)
+        comparison_operator, left_sender_state, right_sender_state = _comparison_metadata(
+            condition, state_variables
+        )
         # Check if the true body is a revert
         true_body = node.get("trueBody", {})
         is_revert = _body_is_revert(true_body)
@@ -430,6 +577,9 @@ def _detect_auth_check_in_node(
                 uses_tx_origin=uses_tx,
                 references_owner=refs_owner,
                 references_role=_node_references_role(condition),
+                comparison_operator=comparison_operator,
+                comparison_left_uses_sender_scoped_state=left_sender_state,
+                comparison_right_uses_sender_scoped_state=right_sender_state,
                 raw_expression="if_revert",
             )
 
@@ -464,6 +614,14 @@ def _body_is_revert(node: dict[str, Any]) -> bool:
             if callee == "revert":
                 return True
     return False
+
+
+def _callee_name(node: dict[str, Any]) -> str:
+    """Return function callee name/member when node is a FunctionCall."""
+    if node.get("nodeType") != "FunctionCall":
+        return ""
+    expr = node.get("expression", {})
+    return expr.get("name", "") or expr.get("memberName", "")
 
 
 def _node_uses_msg_sender(node: dict[str, Any]) -> bool:
@@ -503,6 +661,40 @@ def _node_references_role(node: dict[str, Any]) -> bool:
             name = n.get("name", "")
             if _ROLE_VAR_PATTERNS.search(name):
                 return True
+    return False
+
+
+def _comparison_metadata(
+    node: dict[str, Any], state_variables: list[str]
+) -> tuple[str, bool, bool]:
+    """Return comparison metadata for the first sender-relevant comparison in a node."""
+    for comparison in walk_ast(node):
+        if comparison.get("nodeType") != "BinaryOperation":
+            continue
+        operator = comparison.get("operator", "")
+        if operator not in _COMPARISON_OPERATORS:
+            continue
+        left = comparison.get("leftExpression", {})
+        right = comparison.get("rightExpression", {})
+        left_sender_state = _node_references_sender_scoped_state(left, state_variables)
+        right_sender_state = _node_references_sender_scoped_state(right, state_variables)
+        if left_sender_state or right_sender_state:
+            return operator, left_sender_state, right_sender_state
+    return "", False, False
+
+
+def _node_references_sender_scoped_state(node: dict[str, Any], state_variables: list[str]) -> bool:
+    """Return True if a node references a state variable indexed by msg.sender."""
+    for n in walk_ast(node):
+        if n.get("nodeType") != "IndexAccess":
+            continue
+        base = n.get("baseExpression", {})
+        base_name = base.get("name", "")
+        if not base_name or base_name not in state_variables:
+            continue
+        index = n.get("indexExpression", {})
+        if _node_uses_msg_sender(index):
+            return True
     return False
 
 
@@ -552,6 +744,27 @@ def _detect_sensitive_action(
                         kind="role_grant",
                         description=f"writes to role mapping '{base_name}'",
                     )
+            # dynamic array length write: arr.length = ...
+            if lhs.get("nodeType") == "MemberAccess" and lhs.get("memberName") == "length":
+                base = lhs.get("expression", {})
+                base_name = base.get("name", "")
+                if base_name and base_name in state_variables:
+                    return SensitiveAction(
+                        kind="state_mutation",
+                        description=f"writes dynamic length of '{base_name}'",
+                    )
+
+        # dynamic array length update: arr.length-- / arr.length++
+        if inner.get("nodeType") == "UnaryOperation" and inner.get("operator") in ("--", "++"):
+            sub = inner.get("subExpression", {})
+            if sub.get("nodeType") == "MemberAccess" and sub.get("memberName") == "length":
+                base = sub.get("expression", {})
+                base_name = base.get("name", "")
+                if base_name and base_name in state_variables:
+                    return SensitiveAction(
+                        kind="state_mutation",
+                        description=f"updates dynamic length of '{base_name}'",
+                    )
 
     return None
 
@@ -595,9 +808,28 @@ def _is_owner_variable(name: str) -> bool:
     return bool(_OWNER_VAR_PATTERNS.match(name))
 
 
-def _is_sensitive_by_name(func_name: str) -> bool:
-    """Return True if function name suggests a privileged operation."""
-    return bool(_SENSITIVE_FUNC_PATTERNS.search(func_name))
+def _is_sensitive_name_with_context(func_name: str) -> bool:
+    """Return True when function name and context strongly suggest privileged control.
+
+    High-confidence names always qualify. Low-confidence names must include
+    privileged context terms to avoid over-triggering on user-flow functions.
+    """
+    if _HIGH_CONF_SENSITIVE_FUNC_PATTERNS.search(func_name):
+        return True
+    if _LOW_CONF_SENSITIVE_FUNC_PATTERNS.search(func_name):
+        return bool(_PRIVILEGED_NAME_CONTEXT.search(func_name))
+    return False
+
+
+def _is_constructor_candidate_name(
+    contract_name: str, func_name: str, is_constructor: bool
+) -> bool:
+    """Return True when a non-constructor function appears to be initialization logic."""
+    if is_constructor or not func_name:
+        return False
+    if func_name.lower() == contract_name.lower():
+        return True
+    return bool(_CONSTRUCTOR_CANDIDATE_PATTERNS.search(func_name))
 
 
 def _source_loc(

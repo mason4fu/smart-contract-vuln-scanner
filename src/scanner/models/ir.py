@@ -21,6 +21,9 @@ class AuthCheck(BaseModel):
     uses_tx_origin: bool = False
     references_owner: bool = False
     references_role: bool = False
+    comparison_operator: str = ""
+    comparison_left_uses_sender_scoped_state: bool = False
+    comparison_right_uses_sender_scoped_state: bool = False
     source_location: SourceLocation | None = None
     raw_expression: str = ""
 
@@ -31,6 +34,7 @@ class ModifierInfo(BaseModel):
     name: str
     has_auth_check: bool = False
     auth_checks: list[AuthCheck] = Field(default_factory=list)
+    called_functions: list[str] = Field(default_factory=list)
     source_location: SourceLocation | None = None
 
 
@@ -63,6 +67,7 @@ class FunctionInfo(BaseModel):
     visibility: Literal["public", "external", "internal", "private"] = "internal"
     state_mutability: Literal["pure", "view", "nonpayable", "payable"] = "nonpayable"
     is_constructor: bool = False
+    is_constructor_candidate: bool = False
     is_fallback: bool = False
     is_receive: bool = False
     modifiers: list[str] = Field(default_factory=list)

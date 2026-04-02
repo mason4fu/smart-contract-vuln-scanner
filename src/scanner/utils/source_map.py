@@ -1,4 +1,5 @@
 """Source map utilities: convert byte offsets to line/column numbers."""
+
 import bisect
 
 
@@ -23,9 +24,7 @@ def offset_to_line(offset: int, line_map: list[int]) -> int:
     return max(idx + 1, 1)
 
 
-def offset_to_line_col(
-    offset: int, length: int, line_map: list[int]
-) -> tuple[int, int, int, int]:
+def offset_to_line_col(offset: int, length: int, line_map: list[int]) -> tuple[int, int, int, int]:
     """Return (line_start, col_start, line_end, col_end) from byte offset + length."""
     if not line_map:
         return 1, 0, 1, 0

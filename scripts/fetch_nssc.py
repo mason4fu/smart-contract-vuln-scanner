@@ -1,8 +1,9 @@
 """Fetch Not-So-Smart-Contracts access control samples from GitHub."""
+
 from __future__ import annotations
 
-import urllib.request
 import urllib.error
+import urllib.request
 from pathlib import Path
 
 BASE_URL = "https://raw.githubusercontent.com/crytic/not-so-smart-contracts/master"
