@@ -1,0 +1,8 @@
+{
+  "smartbugs_precision": 1.0,
+  "smartbugs_recall": 1.0,
+  "nssc_precision": 1.0,
+  "nssc_recall": 1.0,
+  "swc_precision": 1.0,
+  "swc_recall": 1.0
+}

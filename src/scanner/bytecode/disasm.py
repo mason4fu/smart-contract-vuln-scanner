@@ -6,7 +6,7 @@ enabling bytecode-level analysis for future detectors.
 
 from __future__ import annotations
 
-from pyevmasm import Instruction, disassemble_hex
+from pyevmasm import Instruction, disassemble_all, disassemble_hex
 
 
 def disassemble(hex_bytecode: str) -> list[Instruction]:
@@ -18,8 +18,8 @@ def disassemble(hex_bytecode: str) -> list[Instruction]:
     Returns:
         List of pyevmasm Instruction objects.
     """
-    # TODO: Add caching, error handling for malformed bytecode
-    return list(disassemble_hex(hex_bytecode))
+    raw_bytes = bytes.fromhex(hex_bytecode)
+    return list(disassemble_all(raw_bytes))
 
 
 def disassemble_to_text(hex_bytecode: str) -> str:

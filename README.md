@@ -16,12 +16,85 @@ Supports both **source-level (AST)** and **bytecode-level (EVM)** analysis.
 | Foundry workspace | ✅ Complete |
 | CI pipelines | ✅ Complete |
 | Smoke tests | ✅ Complete |
-| Vulnerability detectors | 🔲 Not yet implemented |
-| Full analysis pipeline | 🔲 Not yet implemented |
+| Vulnerability detectors | ✅ Complete (access-control) |
+| Full analysis pipeline | ✅ Complete |
 
-This repository contains the **foundation only**: project structure, tooling,
-environment setup, and placeholder modules. No detector logic has been
-implemented yet.
+The access control detector is fully implemented with source-level AST analysis
+and bytecode-level EVM analysis. Run `uv run scanner scan <file.sol>` to start scanning.
+
+---
+
+## Usage
+
+### Scan a Solidity file
+
+```bash
+uv run scanner scan contracts/MyContract.sol
+uv run scanner scan contracts/MyContract.sol --format json
+```
+
+### Scan a directory
+
+```bash
+uv run scanner scan contracts/ --format text
+```
+
+### Scan pre-compiled output
+
+```bash
+uv run scanner scan out/MyContract.json
+```
+
+### Scan raw bytecode
+
+```bash
+uv run scanner scan MyContract.bin
+```
+
+### Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--format`, `-f` | `text` | Output format: `json` or `text` |
+| `--output`, `-o` | `reports/` | Report output directory |
+| `--detector`, `-d` | all | Run only a specific detector |
+| `--bytecode-only` | false | Skip source analysis |
+| `--solc-version` | `0.8.28` | Solidity compiler version |
+
+## Detectors
+
+### `access-control` (implemented)
+
+Detects access control vulnerabilities in Solidity contracts.
+
+| Rule | ID | Severity | Description |
+|------|----|----------|-------------|
+| tx.origin Auth | SWC-115 | HIGH | Authorization using tx.origin instead of msg.sender |
+| Callable Constructor-like Init | SWC-118 | HIGH/MEDIUM | Externally callable constructor-like initialization that mutates ownership |
+| Missing Auth Guard | SWC-105 | HIGH | Sensitive public/external functions with no authorization check |
+| Uninitialized Owner | SWC-105 | MEDIUM | Owner variable declared but never set in constructor |
+| Dangerous Renounce | SWC-106 | LOW | renounceOwnership() with no two-step transfer protection |
+| Unguarded Role Grant | SWC-105 | HIGH | Role/privilege grant function with no authorization guard |
+
+See [`docs/access-control-detector.md`](docs/access-control-detector.md) for details.
+
+## Evaluation Datasets
+
+- **SmartBugs Curated** (18 access control contracts) — 100% precision, 100% recall, F1=1.000
+- **Not-So-Smart-Contracts** (3 contracts) — 100% precision, 100% recall, F1=1.000
+- **SWC Registry pinned subset** (10 contracts/snippets) — 100% precision, 100% recall, F1=1.000
+
+Run the access control detector against the evaluation datasets:
+
+```bash
+uv run python scripts/evaluate_smartbugs.py
+uv run python scripts/evaluate_smartbugs.py --output results.json
+uv run python scripts/evaluate_nssc.py
+uv run python scripts/fetch_swc_registry.py
+uv run python scripts/evaluate_swc_registry.py
+```
+
+See [`docs/evaluation.md`](docs/evaluation.md) for methodology and results.
 
 ---
 

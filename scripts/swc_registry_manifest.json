@@ -1,0 +1,73 @@
+{
+  "repo": "SmartContractSecurity/SWC-registry",
+  "commit": "1b6227074ecd180b374e4844153afdda0332f979",
+  "base_path": "entries/docs",
+  "entries": [
+    {
+      "swc_id": "SWC-105",
+      "doc": "SWC-105.md",
+      "snippet": "multiowned_not_vulnerable.sol",
+      "label": "safe"
+    },
+    {
+      "swc_id": "SWC-105",
+      "doc": "SWC-105.md",
+      "snippet": "multiowned_vulnerable.sol",
+      "label": "vulnerable",
+      "vuln_functions": ["newOwner"]
+    },
+    {
+      "swc_id": "SWC-105",
+      "doc": "SWC-105.md",
+      "snippet": "simple_ether_drain.sol",
+      "label": "vulnerable",
+      "vuln_functions": ["withdrawAllAnyone"]
+    },
+    {
+      "swc_id": "SWC-105",
+      "doc": "SWC-105.md",
+      "snippet": "wallet_03_wrong_constructor.sol",
+      "label": "vulnerable",
+      "vuln_functions": ["initWallet"]
+    },
+    {
+      "swc_id": "SWC-115",
+      "doc": "SWC-115.md",
+      "snippet": "mycontract.sol",
+      "label": "vulnerable",
+      "vuln_functions": ["sendTo"]
+    },
+    {
+      "swc_id": "SWC-115",
+      "doc": "SWC-115.md",
+      "snippet": "mycontract_fixed.sol",
+      "label": "safe"
+    },
+    {
+      "swc_id": "SWC-118",
+      "doc": "SWC-118.md",
+      "snippet": "incorrect_constructor_name1.sol",
+      "label": "vulnerable",
+      "vuln_functions": ["missing"]
+    },
+    {
+      "swc_id": "SWC-118",
+      "doc": "SWC-118.md",
+      "snippet": "incorrect_constructor_name1_fixed.sol",
+      "label": "safe"
+    },
+    {
+      "swc_id": "SWC-118",
+      "doc": "SWC-118.md",
+      "snippet": "incorrect_constructor_name2.sol",
+      "label": "vulnerable",
+      "vuln_functions": ["Constructor"]
+    },
+    {
+      "swc_id": "SWC-118",
+      "doc": "SWC-118.md",
+      "snippet": "incorrect_constructor_name2_fixed.sol",
+      "label": "safe"
+    }
+  ]
+}
