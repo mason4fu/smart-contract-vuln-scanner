@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for the access control scanner tests."""
+"""Shared pytest fixtures for detector tests (access control, reentrancy, etc.)."""
 
 from __future__ import annotations
 
@@ -135,3 +135,13 @@ def compiled_dangerous_renounce():
 @pytest.fixture(scope="session")
 def compiled_unguarded_role_grant():
     return compile_sol_fixture("UnguardedRoleGrant.sol")
+
+
+@pytest.fixture(scope="session")
+def compiled_reentrancy_patterns():
+    return compile_sol_fixture("ReentrancyPatterns.sol")
+
+
+@pytest.fixture(scope="session")
+def compiled_reentrancy_safe_only():
+    return compile_sol_fixture("ReentrancySafeOnly.sol")

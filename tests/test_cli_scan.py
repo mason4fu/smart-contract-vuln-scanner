@@ -123,3 +123,53 @@ def test_cli_scan_suppresses_bytecode_duplicate_for_source_swc():
     out = result.stdout.lower()
     assert "tx.origin used for authorization" in out
     assert "tx.origin used (bytecode)" not in out
+
+
+def test_cli_scan_detector_reentrancy_finds_vulnerable_contract():
+    result = runner.invoke(
+        app,
+        [
+            "scan",
+            str(FIXTURES_DIR / "ReentrancyPatterns.sol"),
+            "--detector",
+            "reentrancy",
+            "--format",
+            "text",
+        ],
+    )
+    assert result.exit_code == 0
+    out = result.stdout
+    assert "VulnerableReentrancy" in out
+    assert "withdraw" in out.lower()
+
+
+def test_cli_scan_detector_reentrancy_safe_contract_no_findings():
+    result = runner.invoke(
+        app,
+        [
+            "scan",
+            str(FIXTURES_DIR / "ReentrancySafeOnly.sol"),
+            "--detector",
+            "reentrancy",
+            "--format",
+            "text",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "No findings" in result.stdout
+
+
+def test_cli_scan_unknown_detector_exits_error():
+    result = runner.invoke(
+        app,
+        [
+            "scan",
+            str(FIXTURES_DIR / "ReentrancyPatterns.sol"),
+            "--detector",
+            "not-a-real-detector",
+            "--format",
+            "text",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "Unknown detector" in result.stdout
