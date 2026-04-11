@@ -33,6 +33,10 @@ class BaseDetector(ABC):
         """Run detection on bytecode (fallback when source is unavailable)."""
         ...
 
+    def detect_from_compiler_output(self, compiler_output: dict[str, Any]) -> list[Finding]:
+        """Optional hook for detectors that need full standard JSON compiler output."""
+        return []
+
 
 def register_detector(cls: type[BaseDetector]) -> type[BaseDetector]:
     """Class decorator to register a detector by name."""

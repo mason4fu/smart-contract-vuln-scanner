@@ -135,8 +135,9 @@ def scan(
       - A pre-compiled .json file (standard JSON output)
       - A .bin or .hex file (bytecode-only analysis)
     """
-    # Ensure access control detector is registered
+    # Ensure detectors are registered with the class registry
     import scanner.detectors.access_control  # noqa: F401
+    import scanner.detectors.reentrancy  # noqa: F401
     from scanner.ast.analysis import analyze_source
     from scanner.bytecode.loader import extract_bytecode
     from scanner.compiler.solc import compile_source, load_compiler_output
@@ -214,6 +215,11 @@ def scan(
                     all_findings.extend(det.detect_from_source(contracts))
             except Exception as exc:
                 console.print(f"  [yellow]Source analysis error: {exc}[/yellow]")
+            try:
+                for det in detector_instances:
+                    all_findings.extend(det.detect_from_compiler_output(compiler_output))
+            except Exception as exc:
+                console.print(f"  [yellow]Compiler-output detection error: {exc}[/yellow]")
 
         try:
             bytecodes = extract_bytecode(compiler_output)
@@ -238,6 +244,11 @@ def scan(
                     all_findings.extend(det.detect_from_source(contracts))
             except Exception as exc:
                 console.print(f"  [yellow]Source analysis error: {exc}[/yellow]")
+            try:
+                for det in detector_instances:
+                    all_findings.extend(det.detect_from_compiler_output(compiler_output))
+            except Exception as exc:
+                console.print(f"  [yellow]Compiler-output detection error: {exc}[/yellow]")
 
         try:
             bytecodes = extract_bytecode(compiler_output)
