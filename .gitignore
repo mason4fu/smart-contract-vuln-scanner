@@ -41,6 +41,9 @@ broadcast/
 reports/*
 !reports/.gitkeep
 
+# Datasets (fetched at runtime, not tracked)
+datasets/
+
 # Compiled sample outputs (generated)
 samples/compiled/*
 !samples/compiled/.gitkeep

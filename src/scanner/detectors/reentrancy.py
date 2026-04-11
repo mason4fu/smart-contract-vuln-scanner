@@ -13,8 +13,10 @@ from typing import Any
 
 from scanner.ast.loader import extract_ast
 from scanner.bytecode.disasm import disassemble
-from scanner.bytecode.loader import extract_bytecode
+from scanner.bytecode.loader import ContractBytecode, extract_bytecode
+from scanner.detectors import BaseDetector, register_detector
 from scanner.models.findings import Finding, Severity, SourceLocation
+from scanner.models.ir import ContractInfo
 
 _CALL_MNEMONICS = frozenset({"CALL", "DELEGATECALL", "STATICCALL", "CALLCODE"})
 
@@ -115,6 +117,7 @@ def detect_reentrancy(compiler_output: dict[str, Any]) -> list[Finding]:
                         location=location,
                         contract=contract_name,
                         function=function_name,
+                        swc_id="SWC-107",
                     )
                 )
 
@@ -330,4 +333,25 @@ def _node_source_location(file_name: str, node: dict[str, Any]) -> SourceLocatio
         column_end=col_end,
     )
 
+
+@register_detector
+class ReentrancyDetector(BaseDetector):
+    """Registers the AST/bytecode reentrancy heuristic with the scanner CLI."""
+
+    name = "reentrancy"
+    description = (
+        "Flags external calls that may execute before subsequent state updates "
+        "(checks-effects-interactions heuristic; bytecode corroboration when available)."
+    )
+
+    def detect_from_source(self, contracts: list[ContractInfo]) -> list[Finding]:
+        return []
+
+    def detect_from_bytecode(
+        self, bytecodes: list[ContractBytecode], extra: dict[str, Any] | None = None
+    ) -> list[Finding]:
+        return []
+
+    def detect_from_compiler_output(self, compiler_output: dict[str, Any]) -> list[Finding]:
+        return detect_reentrancy(compiler_output)
 

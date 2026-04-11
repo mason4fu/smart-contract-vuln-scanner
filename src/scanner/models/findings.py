@@ -44,5 +44,5 @@ class Finding(BaseModel):
     )
     contract: str = Field(default="", description="Contract name.")
     function: str = Field(default="", description="Function name if applicable.")
-
-    # TODO: Add references, remediation suggestions, CWE IDs
+    swc_id: str = Field(default="", description="SWC registry ID (e.g. SWC-115).")
+    remediation: str = Field(default="", description="Suggested fix for the finding.")

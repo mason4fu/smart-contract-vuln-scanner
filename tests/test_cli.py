@@ -42,5 +42,5 @@ def test_cli_scan_writes_report(tmp_path: Path):
         ["scan", str(fixture), "--output", str(tmp_path), "--format", "json"],
     )
     assert result.exit_code == 0
-    assert (tmp_path / "scan.json").is_file()
-    assert "Wrote" in result.stdout
+    assert (tmp_path / f"{fixture.stem}.json").is_file()
+    assert "Report written" in result.stdout
