@@ -5,7 +5,8 @@ Provides a central place to discover and register available detectors.
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from scanner.models.findings import Finding
 
@@ -18,4 +19,3 @@ def get_detectors() -> dict[str, DetectorFn]:
     from scanner.detectors.reentrancy import detect_reentrancy
 
     return {"reentrancy": detect_reentrancy}
-

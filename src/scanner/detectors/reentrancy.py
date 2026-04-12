@@ -69,11 +69,11 @@ def detect_reentrancy(compiler_output: dict[str, Any]) -> list[Finding]:
                         start = _parse_src_start(node.get("src"))
                         if start is not None:
                             call_candidates.append((start, node))
-                    elif node_type == "Assignment" and _assignment_writes_state(node, state_vars):
-                        start = _parse_src_start(node.get("src"))
-                        if start is not None:
-                            write_candidates.append((start, node))
-                    elif node_type == "UnaryOperation" and _unary_op_writes_state(node, state_vars):
+                    elif (
+                        node_type == "Assignment" and _assignment_writes_state(node, state_vars)
+                    ) or (
+                        node_type == "UnaryOperation" and _unary_op_writes_state(node, state_vars)
+                    ):
                         start = _parse_src_start(node.get("src"))
                         if start is not None:
                             write_candidates.append((start, node))
@@ -244,13 +244,9 @@ def _function_has_nonreentrant_modifier(fn_node: dict[str, Any]) -> bool:
 
         mod_name: str | None = None
         modifier_name = mod.get("modifierName")
-        if isinstance(modifier_name, dict) and isinstance(
-            modifier_name.get("name"), str
-        ):
+        if isinstance(modifier_name, dict) and isinstance(modifier_name.get("name"), str):
             mod_name = modifier_name["name"]
-        elif isinstance(mod.get("name"), dict) and isinstance(
-            mod["name"].get("name"), str
-        ):
+        elif isinstance(mod.get("name"), dict) and isinstance(mod["name"].get("name"), str):
             mod_name = mod["name"]["name"]
         elif isinstance(mod.get("modifierName"), str):
             mod_name = mod.get("modifierName")
@@ -354,4 +350,3 @@ class ReentrancyDetector(BaseDetector):
 
     def detect_from_compiler_output(self, compiler_output: dict[str, Any]) -> list[Finding]:
         return detect_reentrancy(compiler_output)
-
