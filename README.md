@@ -98,8 +98,9 @@ uv run scanner scan sample.bin --detector unchecked-external-calls --bytecode-on
 ```
 
 The detector treats `require(success)`, `assert(success)`, `if (!success) revert`,
-bounded helper checks, and returning success to the caller as handled. It does
-not target high-level typed external calls or `.transfer(...)`.
+bounded success aliases such as `handled = success` or `failed = !success`,
+private/internal helper checks, and returning success to the caller as handled.
+It does not target high-level typed external calls or `.transfer(...)`.
 
 See [`docs/unchecked-external-calls.md`](docs/unchecked-external-calls.md) for details.
 

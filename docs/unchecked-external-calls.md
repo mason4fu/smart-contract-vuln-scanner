@@ -31,7 +31,9 @@ Handled patterns include:
 
 - `require(success)` or `assert(success)`
 - `if (!success) revert`, `throw`, `return`, or similar terminating branches
-- bounded helper checks such as `_requireSuccess(success)`
+- bounded aliases such as `bool handled = success; require(handled)`
+- inverted aliases such as `bool failed = !success; if (failed) revert`
+- bounded private/internal helper checks such as `_requireSuccess(success)`
 - returning the success value from the current function
 
 Reported patterns include:
@@ -40,6 +42,8 @@ Reported patterns include:
 - tuple assignment where `success` is assigned but never checked
 - tuple assignment where only returndata is captured
 - success values used only in logs, state writes, or non-gating calls
+- helpers that only log, mutate state, call non-gating functions, or `return`
+  from the helper without terminating the caller
 - sensitive follow-up effects before a clear failure gate
 
 Findings include source file, line, function, call kind, and evidence text.
@@ -84,11 +88,17 @@ Raw all-label diagnostics, including the out-of-scope `.transfer(...)` labels,
 are still printed by the evaluator. On the current subset the raw aggregate is
 TP=67, FP=0, FN=65, precision=1.000, recall=0.508, F1=0.673.
 
+The remaining six scoped SolidiFI `Unhandled-Exceptions` false negatives are
+labels on `if (!addr.send(...) || 1==1) { revert(); }` patterns. The detector
+keeps these classified as checked because failure cannot continue past the
+always-reverting branch.
+
 ## Known Limitations
 
 - No full CFG, symbolic execution, or interprocedural dataflow.
 - Inline assembly and Yul are handled only through bytecode heuristics.
 - Checks far from the call or through complex helper chains may be missed.
+  Helper reasoning is limited to bounded private/internal bool-gating chains.
 - Bytecode-only mode can false-positive optimized code that stores and checks
   success later.
 - The scanner does not reason about whether the target account exists.

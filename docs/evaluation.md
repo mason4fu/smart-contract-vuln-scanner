@@ -130,6 +130,12 @@ currently reports TP=67, FP=0, FN=65, precision=1.000, recall=0.508, F1=0.673.
 The aggregate should not be read as a general benchmark score because the three
 datasets have different origins and annotation styles.
 
+The six remaining scoped SolidiFI `Unhandled-Exceptions` false negatives are
+labels on `if (!addr.send(...) || 1==1) { revert(); }` injected patterns. The
+detector intentionally leaves these as checked because the failure path always
+enters a terminating branch, so execution cannot continue past the low-level
+call failure.
+
 ### Limitations
 
 - The SolidiFI subset uses injected fault logs rather than hand-curated exploit lines.
@@ -137,6 +143,7 @@ datasets have different origins and annotation styles.
 - Some injected unhandled-exception patterns are outside the current low-level call focus.
 - The detector is evaluated against SolidiFI for pressure testing without adding `.transfer(...)` to SWC-104.
 - Bytecode-only findings do not participate in line-level precision/recall unless source maps are later added.
+- Alias and helper reasoning is conservative: it tracks bounded intra-function bool aliases and private/internal helper chains, but does not perform broad symbolic execution.
 
 ## Methodology
 
