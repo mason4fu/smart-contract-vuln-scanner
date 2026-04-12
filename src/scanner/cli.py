@@ -25,11 +25,24 @@ _CONFIDENCE_RANK = {"low": 0, "medium": 1, "high": 2}
 
 
 def _deduplicate_findings(all_findings):
-    """Deduplicate findings by detector/title/contract/function tuple."""
+    """Deduplicate findings by detector/title/location/contract/function tuple."""
     seen: set[tuple] = set()
     unique_findings = []
     for finding in all_findings:
-        key = (finding.detector, finding.title, finding.contract, finding.function)
+        loc_key = None
+        if finding.location is not None:
+            loc_key = (
+                finding.location.file,
+                finding.location.line_start,
+                finding.location.column_start,
+            )
+        key = (
+            finding.detector,
+            finding.title,
+            finding.contract,
+            finding.function,
+            loc_key,
+        )
         if key not in seen:
             seen.add(key)
             unique_findings.append(finding)
@@ -138,6 +151,7 @@ def scan(
     # Ensure detectors are registered with the class registry
     import scanner.detectors.access_control  # noqa: F401
     import scanner.detectors.reentrancy  # noqa: F401
+    import scanner.detectors.unchecked_external_calls  # noqa: F401
     from scanner.ast.analysis import analyze_source
     from scanner.bytecode.loader import extract_bytecode
     from scanner.compiler.solc import compile_source, load_compiler_output
