@@ -110,8 +110,10 @@ See [`docs/unchecked-external-calls.md`](docs/unchecked-external-calls.md) for d
 - **SWC Registry pinned subset** (10 contracts/snippets) — 100% precision, 100% recall, F1=1.000
 - **Unchecked external calls**:
   - SmartBugs unchecked subset — precision 1.000, recall 1.000, F1=1.000
-  - SolidiFI unchecked/unhandled subset — precision 0.879, recall 0.290, F1=0.436
+  - SolidiFI Unhandled-Exceptions scoped subset — precision 1.000, recall 0.898, F1=0.946
   - Not-So-Smart-Contracts unchecked external call — precision 1.000, recall 1.000, F1=1.000
+  - Primary scoped aggregate — precision 1.000, recall 0.918, F1=0.957
+  - Raw all-label diagnostic aggregate — precision 1.000, recall 0.508, F1=0.673
 
 Run the access control detector against the evaluation datasets:
 

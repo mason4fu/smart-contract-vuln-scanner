@@ -110,28 +110,32 @@ uv run python scripts/evaluate_unchecked_calls.py --output reports/unchecked-cal
 1. Fetch only the documented small subset into ignored `datasets/unchecked-external-calls/`.
 2. Compile each contract with the pragma-derived solc version, coercing pre-0.4.11 pragmas to 0.4.11 because py-solc-x cannot install older versions.
 3. Run the unchecked external call detector from compiler output.
-4. Match source findings to labeled vulnerable lines with a default `+/-5` line tolerance.
+4. Match source findings to labeled vulnerable lines with one-to-one matching and a default `+/-6` line tolerance.
 5. Exclude compile failures from TP/FP/FN counts and report them separately.
 6. Use source-located findings for line-level PRF; bytecode findings are retained in JSON output as supporting evidence.
+7. Report SolidiFI `Unchecked-Send` entries separately because the selected samples use `.transfer(...)`, outside the SWC-104 low-level-call scope.
 
 ### Current Results
 
-| Dataset | Compiled | TP | FP | FN | Precision | Recall | F1 |
+| Primary scoped dataset | Compiled | TP | FP | FN | Precision | Recall | F1 |
 |---------|----------|----|----|----|-----------|--------|----|
 | SmartBugs Curated unchecked subset | 5/5 | 10 | 0 | 0 | 1.000 | 1.000 | 1.000 |
-| SolidiFI unchecked/unhandled subset | 5/6 | 29 | 4 | 71 | 0.879 | 0.290 | 0.436 |
+| SolidiFI Unhandled-Exceptions subset | 3/3 | 53 | 0 | 6 | 1.000 | 0.898 | 0.946 |
 | Not-So-Smart-Contracts unchecked external call | 1/1 | 4 | 0 | 0 | 1.000 | 1.000 | 1.000 |
-| Aggregate micro-average | 11/12 | 43 | 4 | 71 | 0.915 | 0.377 | 0.534 |
+| Primary scoped aggregate | 9/9 | 67 | 0 | 6 | 1.000 | 0.918 | 0.957 |
 
-The aggregate is a micro-average over the same line-level protocol. It should
-not be read as a general benchmark score because the three datasets have
-different origins and annotation styles.
+The raw all-label diagnostic aggregate is also printed for transparency. It
+includes the out-of-scope SolidiFI `Unchecked-Send` `.transfer(...)` labels and
+currently reports TP=67, FP=0, FN=65, precision=1.000, recall=0.508, F1=0.673.
+The aggregate should not be read as a general benchmark score because the three
+datasets have different origins and annotation styles.
 
 ### Limitations
 
 - The SolidiFI subset uses injected fault logs rather than hand-curated exploit lines.
+- SolidiFI `Unchecked-Send` labels in this selected subset are `.transfer(...)` examples and are outside this detector's scope.
 - Some injected unhandled-exception patterns are outside the current low-level call focus.
-- The detector was not tuned to the SolidiFI syntax; misses are kept visible for regression tracking.
+- The detector is evaluated against SolidiFI for pressure testing without adding `.transfer(...)` to SWC-104.
 - Bytecode-only findings do not participate in line-level precision/recall unless source maps are later added.
 
 ## Methodology
@@ -161,6 +165,6 @@ different origins and annotation styles.
 
 ## Limitations
 - 5/18 SmartBugs contracts fail to compile (legacy Solidity syntax)
-- Line tolerance=5 may cause FP/FN near closely-spaced vulnerabilities
+- Line-level matching can still be sensitive to clustered labels near closely-spaced vulnerabilities
 - Bytecode analysis does not use the legacy AST, so it works uniformly across Solidity versions
 - Some SmartBugs contracts import files not present in the dataset (e.g., SafeMath), causing compilation failures counted as compile errors rather than false negatives

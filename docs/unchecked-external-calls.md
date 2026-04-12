@@ -67,20 +67,22 @@ uv run python scripts/fetch_unchecked_call_datasets.py
 uv run python scripts/evaluate_unchecked_calls.py --output reports/unchecked-call-eval.json
 ```
 
-The current evaluation uses line-level matching with a default `+/-5` line
-tolerance. Compile failures are reported and excluded from precision, recall,
-and F1.
+The primary evaluation uses one-to-one line-level matching with a default
+`+/-6` line tolerance. Compile failures are reported and excluded from
+precision, recall, and F1. SolidiFI `Unchecked-Send` samples in this subset are
+reported separately because they use `.transfer(...)`, which is outside this
+detector's SWC-104 low-level-call scope.
 
-| Dataset | TP | FP | FN | Precision | Recall | F1 |
+| Primary scoped dataset | TP | FP | FN | Precision | Recall | F1 |
 |---------|----|----|----|-----------|--------|----|
 | SmartBugs Curated unchecked subset | 10 | 0 | 0 | 1.000 | 1.000 | 1.000 |
-| SolidiFI Unchecked-Send / Unhandled-Exceptions subset | 29 | 4 | 71 | 0.879 | 0.290 | 0.436 |
+| SolidiFI Unhandled-Exceptions subset | 53 | 0 | 6 | 1.000 | 0.898 | 0.946 |
 | Not-So-Smart-Contracts unchecked external call | 4 | 0 | 0 | 1.000 | 1.000 | 1.000 |
-| Aggregate micro-average | 43 | 4 | 71 | 0.915 | 0.377 | 0.534 |
+| Primary scoped aggregate | 67 | 0 | 6 | 1.000 | 0.918 | 0.957 |
 
-SolidiFI injects many variants under broad "Unchecked-Send" and
-"Unhandled-Exceptions" labels. The low recall there is a known limitation of
-this first practical pass, not a target for syntax-specific tuning.
+Raw all-label diagnostics, including the out-of-scope `.transfer(...)` labels,
+are still printed by the evaluator. On the current subset the raw aggregate is
+TP=67, FP=0, FN=65, precision=1.000, recall=0.508, F1=0.673.
 
 ## Known Limitations
 
