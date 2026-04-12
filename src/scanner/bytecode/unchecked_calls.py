@@ -20,7 +20,7 @@ _CALL_OPS = {
     "CALLCODE": CallKind.CALLCODE,
 }
 _FOLLOWUP_OPS = {"SSTORE", "SELFDESTRUCT"}
-_TERMINATORS = {"STOP", "RETURN", "REVERT", "INVALID"}
+_TERMINATORS = {"STOP", "RETURN", "REVERT"}
 
 
 def analyze_unchecked_call_bytecode(
@@ -33,7 +33,7 @@ def analyze_unchecked_call_bytecode(
         return []
 
     try:
-        instructions = disassemble(hex_bytecode)
+        instructions = disassemble(_strip_metadata(hex_bytecode))
     except (OSError, ValueError):
         return []
 
@@ -65,7 +65,7 @@ def _classify_bytecode_usage(
 
     for distance, instruction in enumerate(lookahead, start=1):
         mnemonic = _mnemonic(instruction)
-        if mnemonic == "POP":
+        if mnemonic == "POP" and distance == 1:
             return (
                 CallResultUsage(
                     status=CallResultStatus.UNCHECKED,
@@ -122,6 +122,20 @@ def _classify_bytecode_usage(
 def _nearby_revert(instructions: list[Any], jumpi_distance: int) -> bool:
     ahead = instructions[jumpi_distance : jumpi_distance + 8]
     return any(_mnemonic(instruction) in {"REVERT", "INVALID"} for instruction in ahead)
+
+
+def _strip_metadata(hex_bytecode: str) -> str:
+    raw = hex_bytecode[2:] if hex_bytecode.startswith("0x") else hex_bytecode
+    if len(raw) < 4:
+        return raw
+    try:
+        metadata_len = int(raw[-4:], 16) * 2
+    except ValueError:
+        return raw
+    trailer_len = metadata_len + 4
+    if metadata_len <= 0 or trailer_len >= len(raw):
+        return raw
+    return raw[:-trailer_len]
 
 
 def _mnemonic(instruction: Any) -> str:
