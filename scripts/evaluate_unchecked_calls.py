@@ -6,6 +6,7 @@ import argparse
 import json
 import re
 import sys
+from functools import cache
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +24,11 @@ from scanner.evaluation.common import compute_prf, detect_solc_version  # noqa: 
 
 DATASET_DIR = ROOT / "datasets" / "unchecked-external-calls"
 GROUND_TRUTH = DATASET_DIR / "ground_truth.json"
+OUT_OF_SCOPE_SOLIDIFI_BUG_TYPES = {"Unchecked-Send"}
+OUT_OF_SCOPE_REASON = (
+    "SolidiFI Unchecked-Send samples in this subset use .transfer(), which is "
+    "outside the unchecked low-level-call detector scope."
+)
 
 
 def main() -> int:
@@ -31,7 +37,7 @@ def main() -> int:
     parser.add_argument(
         "--tolerance",
         type=int,
-        default=5,
+        default=6,
         help="Line tolerance for matching findings to labels.",
     )
     args = parser.parse_args()
@@ -52,8 +58,38 @@ def main() -> int:
         for dataset in sorted({result["dataset"] for result in results})
     }
     aggregate = compute_line_metrics(results, tolerance=args.tolerance)
+    scoped_results = [result for result in results if _is_primary_scope_result(result)]
+    out_of_scope_results = [result for result in results if not _is_primary_scope_result(result)]
+    scoped_metrics_by_dataset = {
+        dataset: compute_line_metrics(
+            [result for result in scoped_results if result["dataset"] == dataset],
+            tolerance=args.tolerance,
+        )
+        for dataset in sorted({result["dataset"] for result in scoped_results})
+    }
+    scoped_aggregate = compute_line_metrics(scoped_results, tolerance=args.tolerance)
+    out_of_scope = {
+        "reason": OUT_OF_SCOPE_REASON,
+        "metrics": compute_line_metrics(out_of_scope_results, tolerance=args.tolerance),
+        "entries": [
+            {
+                "dataset": result["dataset"],
+                "file": result["file"],
+                "bug_type": result.get("bug_type", ""),
+            }
+            for result in out_of_scope_results
+        ],
+    }
 
-    _print_report(results, metrics_by_dataset, aggregate, args.tolerance)
+    _print_report(
+        results,
+        metrics_by_dataset,
+        aggregate,
+        scoped_metrics_by_dataset,
+        scoped_aggregate,
+        out_of_scope,
+        args.tolerance,
+    )
 
     if args.output:
         out = Path(args.output)
@@ -65,10 +101,17 @@ def main() -> int:
                     "results": results,
                     "metrics_by_dataset": metrics_by_dataset,
                     "aggregate": aggregate,
+                    "scoped_metrics_by_dataset": scoped_metrics_by_dataset,
+                    "scoped_aggregate": scoped_aggregate,
+                    "out_of_scope": out_of_scope,
                     "protocol": {
                         "granularity": "line-level",
                         "tolerance": args.tolerance,
                         "compile_errors": "excluded from precision/recall/F1",
+                        "primary_scope": (
+                            "SWC-104 low-level call findings; SolidiFI Unchecked-Send "
+                            "transfer-only labels are reported separately."
+                        ),
                     },
                 },
                 indent=2,
@@ -90,6 +133,7 @@ def evaluate_entry(
         "dataset": entry["dataset"],
         "file": entry["file"],
         "label": entry["label"],
+        "bug_type": entry.get("bug_type", ""),
         "ground_truth_lines": entry.get("lines", []),
         "solc_version": solc_version,
         "compile_error": None,
@@ -127,14 +171,11 @@ def compute_line_metrics(results: list[dict[str, Any]], *, tolerance: int) -> di
             for finding in result.get("source_findings", [])
             if finding.get("line_start", 0) > 0
         ]
-        matched_truth: set[int] = set()
-        matched_findings: set[int] = set()
-
-        for truth_index, truth_line in enumerate(sorted(truth)):
-            for finding_index, finding_line in enumerate(finding_lines):
-                if abs(finding_line - truth_line) <= tolerance:
-                    matched_truth.add(truth_index)
-                    matched_findings.add(finding_index)
+        matched_truth, matched_findings = _match_line_findings(
+            sorted(truth),
+            finding_lines,
+            tolerance=tolerance,
+        )
 
         tp += len(matched_truth)
         fn += len(truth) - len(matched_truth)
@@ -143,6 +184,58 @@ def compute_line_metrics(results: list[dict[str, Any]], *, tolerance: int) -> di
     metrics = compute_prf(tp=tp, fp=fp, fn=fn)
     metrics["compile_skipped"] = skipped
     return metrics
+
+
+def _match_line_findings(
+    truth_lines: list[int], finding_lines: list[int], *, tolerance: int
+) -> tuple[set[int], set[int]]:
+    indexed_findings = sorted(enumerate(finding_lines), key=lambda item: item[1])
+
+    @cache
+    def solve(
+        truth_index: int, finding_order_index: int
+    ) -> tuple[int, int, tuple[tuple[int, int], ...]]:
+        if truth_index >= len(truth_lines) or finding_order_index >= len(indexed_findings):
+            return 0, 0, ()
+
+        best = solve(truth_index + 1, finding_order_index)
+        best = _better_match(best, solve(truth_index, finding_order_index + 1))
+
+        finding_index, finding_line = indexed_findings[finding_order_index]
+        distance = abs(finding_line - truth_lines[truth_index])
+        if distance <= tolerance:
+            count, total_distance, pairs = solve(truth_index + 1, finding_order_index + 1)
+            candidate = (
+                count + 1,
+                total_distance + distance,
+                ((truth_index, finding_index), *pairs),
+            )
+            best = _better_match(best, candidate)
+
+        return best
+
+    _count, _total_distance, pairs = solve(0, 0)
+    return {truth_index for truth_index, _finding_index in pairs}, {
+        finding_index for _truth_index, finding_index in pairs
+    }
+
+
+def _better_match(
+    left: tuple[int, int, tuple[tuple[int, int], ...]],
+    right: tuple[int, int, tuple[tuple[int, int], ...]],
+) -> tuple[int, int, tuple[tuple[int, int], ...]]:
+    if right[0] > left[0]:
+        return right
+    if right[0] == left[0] and right[1] < left[1]:
+        return right
+    return left
+
+
+def _is_primary_scope_result(result: dict[str, Any]) -> bool:
+    return not (
+        result.get("dataset") == "solidifi"
+        and result.get("bug_type") in OUT_OF_SCOPE_SOLIDIFI_BUG_TYPES
+    )
 
 
 def _finding_payload(finding: Any) -> dict[str, Any]:
@@ -171,11 +264,43 @@ def _print_report(
     results: list[dict[str, Any]],
     metrics_by_dataset: dict[str, dict[str, Any]],
     aggregate: dict[str, Any],
+    scoped_metrics_by_dataset: dict[str, dict[str, Any]],
+    scoped_aggregate: dict[str, Any],
+    out_of_scope: dict[str, Any],
     tolerance: int,
 ) -> None:
     print("Unchecked external call evaluation")
     print(f"Protocol: line-level matching, tolerance=+/-{tolerance}")
     print("-" * 60)
+    print("Primary scoped metrics")
+    for dataset, metrics in scoped_metrics_by_dataset.items():
+        total = sum(
+            1
+            for result in results
+            if result["dataset"] == dataset and _is_primary_scope_result(result)
+        )
+        compiled = total - int(metrics["compile_skipped"])
+        print(dataset)
+        print(f"  Compiled: {compiled}/{total}")
+        print(f"  TP: {metrics['tp']}  FP: {metrics['fp']}  FN: {metrics['fn']}")
+        print(f"  Precision: {metrics['precision']:.3f}")
+        print(f"  Recall:    {metrics['recall']:.3f}")
+        print(f"  F1:        {metrics['f1']:.3f}")
+    print("Primary scoped aggregate")
+    print(
+        f"  TP: {scoped_aggregate['tp']}  "
+        f"FP: {scoped_aggregate['fp']}  FN: {scoped_aggregate['fn']}"
+    )
+    print(f"  Precision: {scoped_aggregate['precision']:.3f}")
+    print(f"  Recall:    {scoped_aggregate['recall']:.3f}")
+    print(f"  F1:        {scoped_aggregate['f1']:.3f}")
+    print("-" * 60)
+    print("Out-of-scope diagnostics")
+    print(f"  Reason: {out_of_scope['reason']}")
+    out_metrics = out_of_scope["metrics"]
+    print(f"  TP: {out_metrics['tp']}  FP: {out_metrics['fp']}  FN: {out_metrics['fn']}")
+    print("-" * 60)
+    print("Raw all-label diagnostics")
     for dataset, metrics in metrics_by_dataset.items():
         total = sum(1 for result in results if result["dataset"] == dataset)
         compiled = total - int(metrics["compile_skipped"])
