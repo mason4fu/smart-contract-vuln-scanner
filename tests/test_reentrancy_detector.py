@@ -36,8 +36,7 @@ def test_vulnerable_contract_source_findings(compiled_reentrancy_patterns):
     vuln = [
         f
         for f in findings
-        if f.contract == "VulnerableReentrancy"
-        and "external call before state" in f.title.lower()
+        if f.contract == "VulnerableReentrancy" and "external call before state" in f.title.lower()
     ]
     assert len(vuln) >= 1
     assert vuln[0].function == "withdraw"
