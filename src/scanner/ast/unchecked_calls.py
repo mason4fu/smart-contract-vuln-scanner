@@ -245,7 +245,7 @@ def _assigned_result_variables(
             if not _contains_node(ancestor.get("initialValue"), call_node):
                 return "", ""
             declarations = ancestor.get("declarations", [])
-            names = [_decl_name(decl) for decl in declarations if isinstance(decl, dict)]
+            names = [_decl_name(decl) if isinstance(decl, dict) else "" for decl in declarations]
             return _first_two_names(names)
         if node_type == "Assignment":
             if not _contains_node(ancestor.get("rightHandSide"), call_node):
