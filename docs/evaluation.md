@@ -7,6 +7,13 @@ The access control scanner is evaluated against three independent datasets:
 - Not-So-Smart-Contracts subset (function-level matching)
 - SWC Registry pinned subset fetched from upstream markdown samples (contract-level matching)
 
+The unchecked external call scanner is evaluated against three small public
+subsets with line-level matching:
+
+- SmartBugs Curated unchecked low-level calls subset
+- SolidiFI-benchmark Unchecked-Send and Unhandled-Exceptions injected samples
+- Not-So-Smart-Contracts unchecked_external_call example
+
 ## Datasets
 
 ### SmartBugs Curated
@@ -84,7 +91,48 @@ uv run python scripts/evaluate_nssc.py
 # Fetch and evaluate pinned SWC subset
 uv run python scripts/fetch_swc_registry.py
 uv run python scripts/evaluate_swc_registry.py
+
+# Fetch and evaluate unchecked external call datasets
+uv run python scripts/fetch_unchecked_call_datasets.py
+uv run python scripts/evaluate_unchecked_calls.py --output reports/unchecked-call-eval.json
 ```
+
+## Unchecked External Calls
+
+### Dataset Pins
+
+- **SmartBugs Curated**: `smartbugs/smartbugs-curated@230e649123477eff332742a59a1c7cc6dc286cab`
+- **SolidiFI-benchmark**: `DependableSystemsLab/SolidiFI-benchmark@4b0573e1b3f7031396de6f48f7f3e7380222ad3a`
+- **Not-So-Smart-Contracts**: `crytic/not-so-smart-contracts@020dbdbde3e0c2e8de5f3944e7455e438b0995d5`
+
+### Matching Protocol
+
+1. Fetch only the documented small subset into ignored `datasets/unchecked-external-calls/`.
+2. Compile each contract with the pragma-derived solc version, coercing pre-0.4.11 pragmas to 0.4.11 because py-solc-x cannot install older versions.
+3. Run the unchecked external call detector from compiler output.
+4. Match source findings to labeled vulnerable lines with a default `+/-5` line tolerance.
+5. Exclude compile failures from TP/FP/FN counts and report them separately.
+6. Use source-located findings for line-level PRF; bytecode findings are retained in JSON output as supporting evidence.
+
+### Current Results
+
+| Dataset | Compiled | TP | FP | FN | Precision | Recall | F1 |
+|---------|----------|----|----|----|-----------|--------|----|
+| SmartBugs Curated unchecked subset | 5/5 | 10 | 0 | 0 | 1.000 | 1.000 | 1.000 |
+| SolidiFI unchecked/unhandled subset | 5/6 | 29 | 4 | 71 | 0.879 | 0.290 | 0.436 |
+| Not-So-Smart-Contracts unchecked external call | 1/1 | 4 | 0 | 0 | 1.000 | 1.000 | 1.000 |
+| Aggregate micro-average | 11/12 | 43 | 4 | 71 | 0.915 | 0.377 | 0.534 |
+
+The aggregate is a micro-average over the same line-level protocol. It should
+not be read as a general benchmark score because the three datasets have
+different origins and annotation styles.
+
+### Limitations
+
+- The SolidiFI subset uses injected fault logs rather than hand-curated exploit lines.
+- Some injected unhandled-exception patterns are outside the current low-level call focus.
+- The detector was not tuned to the SolidiFI syntax; misses are kept visible for regression tracking.
+- Bytecode-only findings do not participate in line-level precision/recall unless source maps are later added.
 
 ## Methodology
 
