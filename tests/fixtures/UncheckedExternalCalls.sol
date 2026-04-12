@@ -138,6 +138,31 @@ contract UncheckedExternalCalls {
         count += 1;
     }
 
+    function helperChainChecked(address target) external {
+        (bool success,) = target.call("");
+        _outerRequireSuccess(success);
+        count += 1;
+    }
+
+    function helperInvertedChecked(address target) external {
+        (bool success,) = target.call("");
+        bool failed = !success;
+        _revertIfFailed(failed);
+        count += 1;
+    }
+
+    function helperNonGatingUnchecked(address target) external {
+        (bool success,) = target.call("");
+        _observeSuccess(success);
+        count += 1;
+    }
+
+    function helperReturnUnchecked(address target) external {
+        (bool success,) = target.call("");
+        _returnOnFailure(success);
+        count += 1;
+    }
+
     function returnsSuccess(address payable target) external payable returns (bool) {
         return target.send(1 wei);
     }
@@ -154,5 +179,29 @@ contract UncheckedExternalCalls {
 
     function _requireSuccess(bool success) internal pure {
         require(success, "low-level call failed");
+    }
+
+    function _outerRequireSuccess(bool success) internal pure {
+        _innerRequireSuccess(success);
+    }
+
+    function _innerRequireSuccess(bool success) private pure {
+        require(success, "inner low-level call failed");
+    }
+
+    function _revertIfFailed(bool failed) internal pure {
+        if (failed) {
+            revert("low-level call failed");
+        }
+    }
+
+    function _observeSuccess(bool success) internal {
+        emit Result(success);
+    }
+
+    function _returnOnFailure(bool success) internal pure {
+        if (!success) {
+            return;
+        }
     }
 }

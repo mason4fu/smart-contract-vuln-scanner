@@ -32,6 +32,8 @@ _FAILURE_TERMINATORS = {
     "Continue",
 }
 _FailureFacts = dict[str, bool]
+_HelperChecks = dict[str, set[tuple[int, bool]]]
+_HELPER_RESOLUTION_DEPTH = 4
 
 
 def analyze_unchecked_external_calls(compiler_output: dict[str, Any]) -> list[ExternalCallSite]:
@@ -78,7 +80,7 @@ def _analyze_function(
     source_text: str,
     line_map: list[int] | None,
     parent_map: dict[int, dict[str, Any]],
-    helper_checks: set[str],
+    helper_checks: _HelperChecks,
 ) -> list[ExternalCallSite]:
     function_name = _function_display_name(fn_node)
     all_nodes = _walk_nodes(fn_node.get("body", {})) if fn_node.get("body") else []
@@ -150,7 +152,7 @@ def _classify_call_usage(
     call_node: dict[str, Any],
     fn_node: dict[str, Any],
     parent_map: dict[int, dict[str, Any]],
-    helper_checks: set[str],
+    helper_checks: _HelperChecks,
 ) -> CallResultUsage:
     if _is_directly_checked(call_node, parent_map):
         return CallResultUsage(
@@ -332,30 +334,19 @@ def _nodes_after_call(fn_node: dict[str, Any], call_node: dict[str, Any]) -> lis
 
 
 def _node_checks_failure(
-    node: dict[str, Any], facts: _FailureFacts, helper_checks: set[str]
+    node: dict[str, Any], facts: _FailureFacts, helper_checks: _HelperChecks
 ) -> bool:
     node_type = node.get("nodeType")
     if node_type == "FunctionCall":
         callee = _callee_name(node)
         if callee in _CHECK_CALLEES:
             return _check_call_fails_on_failure(node, facts=facts)
-        if callee in helper_checks:
-            return any(
-                _expression_value_on_failure(argument, facts=facts) is False
-                for argument in node.get("arguments", [])
-                if isinstance(argument, dict)
-            )
+        return _helper_call_checks_failure(node, facts, helper_checks)
     if node_type == "IfStatement":
         condition = node.get("condition", {})
         if _node_references_failure_fact(condition, facts):
             return _if_failure_path_terminates(node, facts=facts)
     return False
-
-
-def _if_has_failure_handling(if_node: dict[str, Any]) -> bool:
-    return _body_has_failure_terminator(if_node.get("trueBody")) or _body_has_failure_terminator(
-        if_node.get("falseBody")
-    )
 
 
 def _if_failure_path_terminates(
@@ -497,8 +488,8 @@ def _node_always_terminates(node: Any) -> bool:
     return False
 
 
-def _helper_check_functions(contract_node: dict[str, Any]) -> set[str]:
-    helper_names: set[str] = set()
+def _helper_check_functions(contract_node: dict[str, Any]) -> _HelperChecks:
+    helper_nodes: dict[str, dict[str, Any]] = {}
     for node in contract_node.get("nodes", []):
         if not isinstance(node, dict) or node.get("nodeType") != "FunctionDefinition":
             continue
@@ -507,31 +498,128 @@ def _helper_check_functions(contract_node: dict[str, Any]) -> set[str]:
         name = _function_display_name(node)
         if not name:
             continue
-        params = _parameter_names(node)
-        if not params:
+        if not _parameter_names(node):
             continue
-        body = node.get("body", {})
-        for body_node in _walk_nodes(body):
-            if (
-                body_node.get("nodeType") == "FunctionCall"
-                and _callee_name(body_node) in _CHECK_CALLEES
-                and any(_node_references_identifier(body_node, param) for param in params)
-            ):
-                helper_names.add(name)
-            if body_node.get("nodeType") == "IfStatement" and _if_has_failure_handling(body_node):
-                condition = body_node.get("condition", {})
-                if any(_node_references_identifier(condition, param) for param in params):
-                    helper_names.add(name)
-    return helper_names
+        helper_nodes[name] = node
+
+    helper_checks: _HelperChecks = {}
+    for _depth in range(_HELPER_RESOLUTION_DEPTH):
+        changed = False
+        for name, node in helper_nodes.items():
+            checks = _helper_parameter_checks(node, helper_checks)
+            previous = helper_checks.get(name, set())
+            combined = previous | checks
+            if combined != previous:
+                helper_checks[name] = combined
+                changed = True
+        if not changed:
+            break
+    return helper_checks
 
 
-def _parameter_names(fn_node: dict[str, Any]) -> set[str]:
+def _helper_parameter_checks(
+    fn_node: dict[str, Any], helper_checks: _HelperChecks
+) -> set[tuple[int, bool]]:
+    checks: set[tuple[int, bool]] = set()
+    params = _parameter_names(fn_node)
+    body = fn_node.get("body", {})
+    for index, name in enumerate(params):
+        for failure_value in (False, True):
+            facts = {name: failure_value}
+            if _helper_body_terminates_for_facts(body, facts, helper_checks):
+                checks.add((index, failure_value))
+    return checks
+
+
+def _helper_body_terminates_for_facts(
+    node: Any, facts: _FailureFacts, helper_checks: _HelperChecks
+) -> bool:
+    if not isinstance(node, dict):
+        return False
+    if node.get("nodeType") not in ("Block", "UncheckedBlock"):
+        return _helper_statement_terminates_for_facts(node, facts, helper_checks)
+    for statement in node.get("statements", []):
+        if _helper_statement_terminates_for_facts(statement, facts, helper_checks):
+            return True
+        if isinstance(statement, dict):
+            _update_failure_facts(statement, facts)
+    return False
+
+
+def _helper_statement_terminates_for_facts(
+    node: Any, facts: _FailureFacts, helper_checks: _HelperChecks
+) -> bool:
+    if not isinstance(node, dict):
+        return False
+
+    node_type = node.get("nodeType")
+    if node_type in ("RevertStatement", "Throw"):
+        return True
+    if node_type in ("Block", "UncheckedBlock"):
+        return _helper_body_terminates_for_facts(node, facts.copy(), helper_checks)
+    if node_type == "ExpressionStatement":
+        expression = node.get("expression")
+        return _helper_statement_terminates_for_facts(expression, facts, helper_checks)
+    if node_type == "FunctionCall":
+        callee = _callee_name(node)
+        if callee == "revert":
+            return True
+        if callee in _CHECK_CALLEES:
+            return _check_call_fails_on_failure(node, facts=facts)
+        return _helper_call_checks_failure(node, facts, helper_checks)
+    if node_type == "IfStatement":
+        condition_value = _expression_value_on_failure(node.get("condition", {}), facts=facts)
+        if condition_value is True:
+            return _helper_body_terminates_for_facts(
+                node.get("trueBody"), facts.copy(), helper_checks
+            )
+        if condition_value is False:
+            return _helper_body_terminates_for_facts(
+                node.get("falseBody"), facts.copy(), helper_checks
+            )
+        return _helper_body_terminates_for_facts(
+            node.get("trueBody"), facts.copy(), helper_checks
+        ) and _helper_body_terminates_for_facts(node.get("falseBody"), facts.copy(), helper_checks)
+    return False
+
+
+def _helper_call_checks_failure(
+    node: dict[str, Any], facts: _FailureFacts, helper_checks: _HelperChecks
+) -> bool:
+    callee = _callee_name(node)
+    callee_checks = helper_checks.get(callee)
+    if not callee_checks:
+        return False
+    for index, argument in enumerate(node.get("arguments", [])):
+        if not isinstance(argument, dict):
+            continue
+        argument_value = _expression_value_on_failure(argument, facts=facts)
+        if argument_value is not None and (index, argument_value) in callee_checks:
+            return True
+    return False
+
+
+def _parameter_names(fn_node: dict[str, Any]) -> list[str]:
     params = fn_node.get("parameters", {}).get("parameters", [])
-    return {
-        str(param.get("name"))
-        for param in params
-        if isinstance(param, dict) and isinstance(param.get("name"), str) and param.get("name")
-    }
+    names: list[str] = []
+    for param in params:
+        if not isinstance(param, dict):
+            continue
+        name = param.get("name")
+        if not isinstance(name, str) or not name:
+            continue
+        if not _is_bool_parameter(param):
+            continue
+        names.append(name)
+    return names
+
+
+def _is_bool_parameter(param: dict[str, Any]) -> bool:
+    type_descriptions = param.get("typeDescriptions", {})
+    if isinstance(type_descriptions, dict) and type_descriptions.get("typeString") == "bool":
+        return True
+    type_name = param.get("typeName", {})
+    return isinstance(type_name, dict) and type_name.get("name") == "bool"
 
 
 def _followup_effects(
@@ -540,7 +628,7 @@ def _followup_effects(
     parent_map: dict[int, dict[str, Any]],
     line_map: list[int] | None,
     source_file: str,
-    helper_checks: set[str],
+    helper_checks: _HelperChecks,
 ) -> list[FollowupEffect]:
     effects: list[FollowupEffect] = []
     success_var, _returndata_var = _assigned_result_variables(call_node, parent_map)
