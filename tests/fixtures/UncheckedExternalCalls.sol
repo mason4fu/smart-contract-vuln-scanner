@@ -58,6 +58,33 @@ contract UncheckedExternalCalls {
         count += 1;
     }
 
+    function uncheckedIfObserver(address payable target) external payable {
+        if (!target.send(1 wei)) {
+            count += 1;
+        }
+    }
+
+    function uncheckedIfOrObserver(address payable target) external payable {
+        if (!target.send(1 wei) || true) {
+            count += 1;
+        }
+    }
+
+    function checkedDirectIfReturn(address payable target) external payable {
+        if (!target.send(1 wei)) {
+            return;
+        }
+        count += 1;
+    }
+
+    function checkedDirectIfElseRevert(address payable target) external payable {
+        if (target.send(1 wei)) {
+            count += 1;
+        } else {
+            revert("send failed");
+        }
+    }
+
     function checkedHelper(address target) external {
         (bool success,) = target.call("");
         _requireSuccess(success);

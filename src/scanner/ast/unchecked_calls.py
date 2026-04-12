@@ -159,6 +159,14 @@ def _classify_call_usage(
             evidence="call success is returned to the caller",
         )
 
+    if _is_direct_condition_usage(call_node, parent_map):
+        return CallResultUsage(
+            status=CallResultStatus.PROBABLY_UNCHECKED,
+            evidence=(
+                "call success is used in a conditional, but failure does not clearly stop execution"
+            ),
+        )
+
     success_var, returndata_var = _assigned_result_variables(call_node, parent_map)
     if not success_var:
         status = CallResultStatus.UNCHECKED
@@ -220,10 +228,24 @@ def _is_directly_checked(call_node: dict[str, Any], parent_map: dict[int, dict[s
         if node_type == "IfStatement":
             condition = ancestor.get("condition", {})
             if _contains_node(condition, call_node):
-                return _if_has_failure_handling(ancestor) or True
+                return _if_failure_path_terminates(ancestor, call_node=call_node)
         if node_type == "ExpressionStatement":
             break
         if node_type in ("VariableDeclarationStatement", "Assignment"):
+            break
+    return False
+
+
+def _is_direct_condition_usage(
+    call_node: dict[str, Any], parent_map: dict[int, dict[str, Any]]
+) -> bool:
+    for ancestor in _ancestors(call_node, parent_map):
+        node_type = ancestor.get("nodeType")
+        if node_type == "IfStatement":
+            return _contains_node(ancestor.get("condition", {}), call_node)
+        if node_type == "ExpressionStatement":
+            break
+        if node_type in ("VariableDeclarationStatement", "Assignment", "Return"):
             break
     return False
 
@@ -311,7 +333,7 @@ def _node_checks_identifier(
     if node_type == "IfStatement":
         condition = node.get("condition", {})
         if _node_references_identifier(condition, success_var):
-            return _if_has_failure_handling(node)
+            return _if_failure_path_terminates(node, success_var=success_var)
     return False
 
 
@@ -319,6 +341,97 @@ def _if_has_failure_handling(if_node: dict[str, Any]) -> bool:
     return _body_has_failure_terminator(if_node.get("trueBody")) or _body_has_failure_terminator(
         if_node.get("falseBody")
     )
+
+
+def _if_failure_path_terminates(
+    if_node: dict[str, Any],
+    *,
+    call_node: dict[str, Any] | None = None,
+    success_var: str = "",
+) -> bool:
+    failure_condition_value = _condition_value_on_failure(
+        if_node.get("condition", {}),
+        call_node=call_node,
+        success_var=success_var,
+    )
+    if failure_condition_value is True:
+        return _body_has_failure_terminator(if_node.get("trueBody"))
+    if failure_condition_value is False:
+        return _body_has_failure_terminator(if_node.get("falseBody"))
+    return _body_has_failure_terminator(if_node.get("trueBody")) and _body_has_failure_terminator(
+        if_node.get("falseBody")
+    )
+
+
+def _condition_value_on_failure(
+    node: Any,
+    *,
+    call_node: dict[str, Any] | None,
+    success_var: str,
+) -> bool | None:
+    if not isinstance(node, dict):
+        return None
+
+    if call_node is not None and id(node) == id(call_node):
+        return False
+    if success_var and node.get("nodeType") == "Identifier" and node.get("name") == success_var:
+        return False
+    literal = _bool_literal_value(node)
+    if literal is not None:
+        return literal
+
+    node_type = node.get("nodeType")
+    if node_type == "UnaryOperation" and node.get("operator") == "!":
+        inner = _condition_value_on_failure(
+            node.get("subExpression"),
+            call_node=call_node,
+            success_var=success_var,
+        )
+        return None if inner is None else not inner
+
+    if node_type == "BinaryOperation":
+        operator = node.get("operator")
+        left = _condition_value_on_failure(
+            node.get("leftExpression"),
+            call_node=call_node,
+            success_var=success_var,
+        )
+        right = _condition_value_on_failure(
+            node.get("rightExpression"),
+            call_node=call_node,
+            success_var=success_var,
+        )
+        if operator == "||":
+            if left is True or right is True:
+                return True
+            if left is False and right is False:
+                return False
+            return None
+        if operator == "&&":
+            if left is False or right is False:
+                return False
+            if left is True and right is True:
+                return True
+            return None
+        if operator in ("==", "!=") and left is not None and right is not None:
+            equal = left == right
+            return equal if operator == "==" else not equal
+
+    return None
+
+
+def _bool_literal_value(node: dict[str, Any]) -> bool | None:
+    if node.get("nodeType") != "Literal":
+        return None
+    value = node.get("value")
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        if value.lower() == "true":
+            return True
+        if value.lower() == "false":
+            return False
+    return None
 
 
 def _body_has_failure_terminator(node: Any) -> bool:
