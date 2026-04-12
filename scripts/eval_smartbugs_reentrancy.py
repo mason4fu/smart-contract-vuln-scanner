@@ -41,7 +41,6 @@ import solcx  # noqa: E402
 
 from scanner.detectors.reentrancy import detect_reentrancy  # noqa: E402
 
-
 DEFAULT_OUTPUT_SELECTION: dict[str, Any] = {
     "*": {
         "*": [
@@ -123,7 +122,9 @@ def _expected_reentrancy_lines(entry: dict[str, Any]) -> list[int]:
     return sorted(set(lines))
 
 
-def _compile_standard_file(source_path: Path, solc_version: str) -> tuple[dict[str, Any] | None, str]:
+def _compile_standard_file(
+    source_path: Path, solc_version: str
+) -> tuple[dict[str, Any] | None, str]:
     """Return (compiler_output, error_message). error_message empty on success."""
     try:
         installed = {str(v) for v in solcx.get_installed_solc_versions()}
@@ -311,8 +312,10 @@ def _print_report(s: Summary) -> None:
     for r in s.rows:
         if not r.compiled or not r.detected:
             status = "SKIP" if not r.compiled else "MISS"
-            err = f" | {r.compile_error[:120]}..." if len(r.compile_error) > 120 else (
-                f" | {r.compile_error}" if r.compile_error else ""
+            err = (
+                f" | {r.compile_error[:120]}..."
+                if len(r.compile_error) > 120
+                else (f" | {r.compile_error}" if r.compile_error else "")
             )
             print(f"  [{status}] {r.name} (pragma {r.pragma}) findings={r.finding_count}{err}")
 
