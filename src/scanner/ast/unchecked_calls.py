@@ -31,6 +31,7 @@ _FAILURE_TERMINATORS = {
     "Break",
     "Continue",
 }
+_FailureFacts = dict[str, bool]
 
 
 def analyze_unchecked_external_calls(compiler_output: dict[str, Any]) -> list[ExternalCallSite]:
@@ -88,7 +89,14 @@ def _analyze_function(
         location = _source_loc(call_node, source_file, line_map=line_map)
         usage = _classify_call_usage(call_node, fn_node, parent_map, helper_checks)
         assigned_variables = [v for v in (usage.success_variable, usage.returndata_variable) if v]
-        followup_effects = _followup_effects(call_node, fn_node, parent_map, line_map, source_file)
+        followup_effects = _followup_effects(
+            call_node,
+            fn_node,
+            parent_map,
+            line_map,
+            source_file,
+            helper_checks,
+        )
         site = ExternalCallSite(
             call_kind=call_kind,
             contract=contract_name,
@@ -180,13 +188,13 @@ def _classify_call_usage(
             evidence=evidence,
         )
 
+    failure_facts: _FailureFacts = {success_var: False}
     later_nodes = _nodes_after_call(fn_node, call_node)
     used = False
     for later in later_nodes:
-        if not _node_references_identifier(later, success_var):
-            continue
-        used = True
-        if _node_checks_identifier(later, success_var, helper_checks):
+        if _node_references_failure_fact(later, failure_facts):
+            used = True
+        if _node_checks_failure(later, failure_facts, helper_checks):
             return CallResultUsage(
                 status=CallResultStatus.CHECKED,
                 success_variable=success_var,
@@ -195,7 +203,9 @@ def _classify_call_usage(
                 failure_handling_exists=True,
                 evidence=f"success variable '{success_var}' gates execution after the call",
             )
-        if later.get("nodeType") == "Return":
+        if later.get("nodeType") == "Return" and _node_references_failure_fact(
+            later, failure_facts
+        ):
             return CallResultUsage(
                 status=CallResultStatus.DELEGATED,
                 success_variable=success_var,
@@ -203,6 +213,7 @@ def _classify_call_usage(
                 returned_to_caller=True,
                 evidence=f"success variable '{success_var}' is returned to the caller",
             )
+        _update_failure_facts(later, failure_facts)
 
     if not used:
         return CallResultUsage(
@@ -224,7 +235,7 @@ def _is_directly_checked(call_node: dict[str, Any], parent_map: dict[int, dict[s
     for ancestor in _ancestors(call_node, parent_map):
         node_type = ancestor.get("nodeType")
         if node_type == "FunctionCall" and _callee_name(ancestor) in _CHECK_CALLEES:
-            return True
+            return _check_call_fails_on_failure(ancestor, call_node=call_node, facts={})
         if node_type == "IfStatement":
             condition = ancestor.get("condition", {})
             if _contains_node(condition, call_node):
@@ -320,20 +331,24 @@ def _nodes_after_call(fn_node: dict[str, Any], call_node: dict[str, Any]) -> lis
     return later
 
 
-def _node_checks_identifier(
-    node: dict[str, Any], success_var: str, helper_checks: set[str]
+def _node_checks_failure(
+    node: dict[str, Any], facts: _FailureFacts, helper_checks: set[str]
 ) -> bool:
     node_type = node.get("nodeType")
     if node_type == "FunctionCall":
         callee = _callee_name(node)
         if callee in _CHECK_CALLEES:
-            return True
+            return _check_call_fails_on_failure(node, facts=facts)
         if callee in helper_checks:
-            return True
+            return any(
+                _expression_value_on_failure(argument, facts=facts) is False
+                for argument in node.get("arguments", [])
+                if isinstance(argument, dict)
+            )
     if node_type == "IfStatement":
         condition = node.get("condition", {})
-        if _node_references_identifier(condition, success_var):
-            return _if_failure_path_terminates(node, success_var=success_var)
+        if _node_references_failure_fact(condition, facts):
+            return _if_failure_path_terminates(node, facts=facts)
     return False
 
 
@@ -347,12 +362,12 @@ def _if_failure_path_terminates(
     if_node: dict[str, Any],
     *,
     call_node: dict[str, Any] | None = None,
-    success_var: str = "",
+    facts: _FailureFacts | None = None,
 ) -> bool:
-    failure_condition_value = _condition_value_on_failure(
+    failure_condition_value = _expression_value_on_failure(
         if_node.get("condition", {}),
         call_node=call_node,
-        success_var=success_var,
+        facts=facts or {},
     )
     if failure_condition_value is True:
         return _body_has_failure_terminator(if_node.get("trueBody"))
@@ -363,43 +378,60 @@ def _if_failure_path_terminates(
     )
 
 
-def _condition_value_on_failure(
+def _check_call_fails_on_failure(
+    node: dict[str, Any],
+    *,
+    call_node: dict[str, Any] | None = None,
+    facts: _FailureFacts | None = None,
+) -> bool:
+    arguments = node.get("arguments", [])
+    if not arguments or not isinstance(arguments[0], dict):
+        return False
+    return (
+        _expression_value_on_failure(arguments[0], call_node=call_node, facts=facts or {}) is False
+    )
+
+
+def _expression_value_on_failure(
     node: Any,
     *,
-    call_node: dict[str, Any] | None,
-    success_var: str,
+    call_node: dict[str, Any] | None = None,
+    facts: _FailureFacts | None = None,
 ) -> bool | None:
     if not isinstance(node, dict):
         return None
 
+    facts = facts or {}
     if call_node is not None and id(node) == id(call_node):
         return False
-    if success_var and node.get("nodeType") == "Identifier" and node.get("name") == success_var:
-        return False
+    if node.get("nodeType") == "Identifier":
+        name = str(node.get("name") or "")
+        if name in facts:
+            return facts[name]
     literal = _bool_literal_value(node)
     if literal is not None:
         return literal
 
     node_type = node.get("nodeType")
     if node_type == "UnaryOperation" and node.get("operator") == "!":
-        inner = _condition_value_on_failure(
+        inner = _expression_value_on_failure(
             node.get("subExpression"),
             call_node=call_node,
-            success_var=success_var,
+            facts=facts,
         )
         return None if inner is None else not inner
 
     if node_type == "BinaryOperation":
         operator = node.get("operator")
-        left = _condition_value_on_failure(
+        left = _expression_value_on_failure(
             node.get("leftExpression"),
             call_node=call_node,
-            success_var=success_var,
+            facts=facts,
         )
-        right = _condition_value_on_failure(
+        right = _expression_value_on_failure(
             node.get("rightExpression"),
             call_node=call_node,
-            success_var=success_var,
+            facts=facts,
         )
         if operator == "||":
             if left is True or right is True:
@@ -437,12 +469,31 @@ def _bool_literal_value(node: dict[str, Any]) -> bool | None:
 def _body_has_failure_terminator(node: Any) -> bool:
     if not isinstance(node, dict):
         return False
-    for child in _walk_nodes(node):
-        node_type = child.get("nodeType")
-        if node_type in _FAILURE_TERMINATORS:
-            return True
-        if node_type == "FunctionCall" and _callee_name(child) == "revert":
-            return True
+    return _node_always_terminates(node)
+
+
+def _node_always_terminates(node: Any) -> bool:
+    if not isinstance(node, dict):
+        return False
+
+    node_type = node.get("nodeType")
+    if node_type in _FAILURE_TERMINATORS:
+        return True
+    if node_type == "ExpressionStatement":
+        expression = node.get("expression")
+        return (
+            isinstance(expression, dict)
+            and expression.get("nodeType") == "FunctionCall"
+            and _callee_name(expression) == "revert"
+        )
+    if node_type == "FunctionCall":
+        return _callee_name(node) == "revert"
+    if node_type in ("Block", "UncheckedBlock"):
+        return any(_node_always_terminates(statement) for statement in node.get("statements", []))
+    if node_type == "IfStatement":
+        return _node_always_terminates(node.get("trueBody")) and _node_always_terminates(
+            node.get("falseBody")
+        )
     return False
 
 
@@ -489,11 +540,13 @@ def _followup_effects(
     parent_map: dict[int, dict[str, Any]],
     line_map: list[int] | None,
     source_file: str,
+    helper_checks: set[str],
 ) -> list[FollowupEffect]:
     effects: list[FollowupEffect] = []
     success_var, _returndata_var = _assigned_result_variables(call_node, parent_map)
+    failure_facts: _FailureFacts = {success_var: False} if success_var else {}
     for node in _nodes_after_call(fn_node, call_node):
-        if success_var and _node_checks_identifier(node, success_var, set()):
+        if failure_facts and _node_checks_failure(node, failure_facts, helper_checks):
             break
         node_type = node.get("nodeType")
         if node_type == "Assignment":
@@ -530,7 +583,42 @@ def _followup_effects(
             )
         if len(effects) >= 3:
             break
+        _update_failure_facts(node, failure_facts)
     return effects
+
+
+def _update_failure_facts(node: dict[str, Any], facts: _FailureFacts) -> None:
+    node_type = node.get("nodeType")
+    if node_type == "VariableDeclarationStatement":
+        declarations = node.get("declarations", [])
+        initial_value = node.get("initialValue")
+        if len(declarations) == 1 and isinstance(declarations[0], dict):
+            name = _decl_name(declarations[0])
+            if name:
+                _set_or_clear_failure_fact(name, initial_value, facts)
+        return
+
+    if node_type != "Assignment":
+        return
+
+    left_names = _assignment_lhs_names(node.get("leftHandSide"))
+    if len(left_names) != 1 or not left_names[0]:
+        for name in left_names:
+            facts.pop(name, None)
+        return
+    _set_or_clear_failure_fact(left_names[0], node.get("rightHandSide"), facts)
+
+
+def _set_or_clear_failure_fact(name: str, expression: Any, facts: _FailureFacts) -> None:
+    value = _expression_value_on_failure(expression, facts=facts)
+    if value is None:
+        facts.pop(name, None)
+    else:
+        facts[name] = value
+
+
+def _node_references_failure_fact(node: Any, facts: _FailureFacts) -> bool:
+    return any(_node_references_identifier(node, name) for name in facts)
 
 
 def _call_kind_from_function_call(node: dict[str, Any]) -> CallKind | None:

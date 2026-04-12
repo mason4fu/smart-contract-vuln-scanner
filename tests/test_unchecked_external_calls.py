@@ -37,13 +37,19 @@ def test_source_extractor_classifies_checked_and_unchecked_calls():
     assert by_function["successOnlyLogged"] == CallResultStatus.PROBABLY_UNCHECKED
     assert by_function["uncheckedIfObserver"] == CallResultStatus.PROBABLY_UNCHECKED
     assert by_function["uncheckedIfOrObserver"] == CallResultStatus.PROBABLY_UNCHECKED
+    assert by_function["aliasUncheckedLogged"] == CallResultStatus.PROBABLY_UNCHECKED
+    assert by_function["nestedBranchFailureContinues"] == CallResultStatus.PROBABLY_UNCHECKED
     assert by_function["checkedRequire"] == CallResultStatus.CHECKED
     assert by_function["checkedAssert"] == CallResultStatus.CHECKED
     assert by_function["checkedIfRevert"] == CallResultStatus.CHECKED
+    assert by_function["aliasChecked"] == CallResultStatus.CHECKED
+    assert by_function["invertedAliasChecked"] == CallResultStatus.CHECKED
     assert by_function["checkedDirectIfReturn"] == CallResultStatus.CHECKED
     assert by_function["checkedDirectIfElseRevert"] == CallResultStatus.CHECKED
+    assert by_function["nestedBranchFailureTerminates"] == CallResultStatus.CHECKED
     assert by_function["checkedHelper"] == CallResultStatus.CHECKED
     assert by_function["returnsSuccess"] == CallResultStatus.DELEGATED
+    assert "transferOutOfScope" not in by_function
 
 
 def test_detector_reports_only_unchecked_source_calls():
@@ -60,14 +66,20 @@ def test_detector_reports_only_unchecked_source_calls():
     assert "successOnlyLogged" in functions
     assert "uncheckedIfObserver" in functions
     assert "uncheckedIfOrObserver" in functions
+    assert "aliasUncheckedLogged" in functions
+    assert "nestedBranchFailureContinues" in functions
     assert "mixed" in functions
     assert "checkedRequire" not in functions
     assert "checkedAssert" not in functions
     assert "checkedIfRevert" not in functions
+    assert "aliasChecked" not in functions
+    assert "invertedAliasChecked" not in functions
     assert "checkedDirectIfReturn" not in functions
     assert "checkedDirectIfElseRevert" not in functions
+    assert "nestedBranchFailureTerminates" not in functions
     assert "checkedHelper" not in functions
     assert "returnsSuccess" not in functions
+    assert "transferOutOfScope" not in functions
     assert all(finding.swc_id == "SWC-104" for finding in findings)
 
 

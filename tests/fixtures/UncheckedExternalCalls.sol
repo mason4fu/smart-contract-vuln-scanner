@@ -58,6 +58,29 @@ contract UncheckedExternalCalls {
         count += 1;
     }
 
+    function aliasChecked(address target) external {
+        (bool ok,) = target.call("");
+        bool handled = ok;
+        require(handled, "call failed");
+        count += 1;
+    }
+
+    function aliasUncheckedLogged(address target) external {
+        (bool ok,) = target.call("");
+        bool handled = ok;
+        emit Result(handled);
+        count += 1;
+    }
+
+    function invertedAliasChecked(address target) external {
+        (bool ok,) = target.call("");
+        bool failed = !ok;
+        if (failed) {
+            revert("call failed");
+        }
+        count += 1;
+    }
+
     function uncheckedIfObserver(address payable target) external payable {
         if (!target.send(1 wei)) {
             count += 1;
@@ -85,6 +108,30 @@ contract UncheckedExternalCalls {
         }
     }
 
+    function nestedBranchFailureContinues(address target) external {
+        (bool ok,) = target.call("");
+        bool failed = !ok;
+        if (failed) {
+            if (count > 0) {
+                revert("sometimes");
+            }
+            count += 1;
+        }
+    }
+
+    function nestedBranchFailureTerminates(address target) external {
+        (bool ok,) = target.call("");
+        bool failed = !ok;
+        if (failed) {
+            if (count > 0) {
+                revert("always");
+            } else {
+                return;
+            }
+        }
+        count += 1;
+    }
+
     function checkedHelper(address target) external {
         (bool success,) = target.call("");
         _requireSuccess(success);
@@ -93,6 +140,10 @@ contract UncheckedExternalCalls {
 
     function returnsSuccess(address payable target) external payable returns (bool) {
         return target.send(1 wei);
+    }
+
+    function transferOutOfScope(address payable target) external payable {
+        target.transfer(1 wei);
     }
 
     function mixed(address target) external {
