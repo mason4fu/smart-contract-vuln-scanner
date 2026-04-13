@@ -28,8 +28,6 @@ _FAILURE_TERMINATORS = {
     "RevertStatement",
     "Throw",
     "Return",
-    "Break",
-    "Continue",
 }
 _FailureFacts = dict[str, bool]
 _HelperChecks = dict[str, set[tuple[int, bool]]]
