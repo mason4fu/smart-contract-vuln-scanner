@@ -25,7 +25,7 @@ _CONFIDENCE_RANK = {"low": 0, "medium": 1, "high": 2}
 
 
 def _deduplicate_findings(all_findings):
-    """Deduplicate findings by detector/title/location/contract/function tuple."""
+    """Deduplicate findings by detector/title/contract/function/location tuple."""
     seen: set[tuple] = set()
     unique_findings = []
     for finding in all_findings:
