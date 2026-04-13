@@ -35,6 +35,10 @@ def test_source_extractor_classifies_checked_and_unchecked_calls():
     assert by_function["tupleAssignedNeverChecked"] == CallResultStatus.UNCHECKED
     assert by_function["onlyReturndataCaptured"] == CallResultStatus.PROBABLY_UNCHECKED
     assert by_function["successOnlyLogged"] == CallResultStatus.PROBABLY_UNCHECKED
+    assert by_function["failureOnlyEventObserver"] == CallResultStatus.CHECKED
+    assert by_function["failureOnlyEventObserverThenMutates"] == CallResultStatus.PROBABLY_UNCHECKED
+    assert by_function["failureObserverBranchMutates"] == CallResultStatus.PROBABLY_UNCHECKED
+    assert by_function["tautologicalEventObserver"] == CallResultStatus.PROBABLY_UNCHECKED
     assert by_function["uncheckedIfObserver"] == CallResultStatus.PROBABLY_UNCHECKED
     assert by_function["uncheckedIfOrObserver"] == CallResultStatus.PROBABLY_UNCHECKED
     assert by_function["aliasUncheckedLogged"] == CallResultStatus.PROBABLY_UNCHECKED
@@ -55,6 +59,9 @@ def test_source_extractor_classifies_checked_and_unchecked_calls():
     assert by_function["returnsSuccess"] == CallResultStatus.DELEGATED
     assert "transferOutOfScope" not in by_function
 
+    observed = next(site for site in sites if site.function == "failureOnlyEventObserver")
+    assert "failure observed without continuation effects" in observed.result_usage.evidence
+
 
 def test_detector_reports_only_unchecked_source_calls():
     compiler_output = compile_source(FIXTURES_DIR / "UncheckedExternalCalls.sol")
@@ -68,6 +75,10 @@ def test_detector_reports_only_unchecked_source_calls():
     assert "tupleAssignedNeverChecked" in functions
     assert "onlyReturndataCaptured" in functions
     assert "successOnlyLogged" in functions
+    assert "failureOnlyEventObserver" not in functions
+    assert "failureOnlyEventObserverThenMutates" in functions
+    assert "failureObserverBranchMutates" in functions
+    assert "tautologicalEventObserver" in functions
     assert "uncheckedIfObserver" in functions
     assert "uncheckedIfOrObserver" in functions
     assert "aliasUncheckedLogged" in functions

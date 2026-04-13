@@ -170,6 +170,13 @@ def _classify_call_usage(
         )
 
     if _is_direct_condition_usage(call_node, parent_map):
+        if _direct_failure_observer_without_continuation(call_node, fn_node, parent_map):
+            return CallResultUsage(
+                status=CallResultStatus.CHECKED,
+                success_checked=True,
+                failure_handling_exists=True,
+                evidence="call failure observed without continuation effects",
+            )
         return CallResultUsage(
             status=CallResultStatus.PROBABLY_UNCHECKED,
             evidence=(
@@ -191,6 +198,7 @@ def _classify_call_usage(
         )
 
     failure_facts: _FailureFacts = {success_var: False}
+    success_facts: _FailureFacts = {success_var: True}
     later_nodes = _nodes_after_call(fn_node, call_node)
     used = False
     for later in later_nodes:
@@ -215,7 +223,20 @@ def _classify_call_usage(
                 returned_to_caller=True,
                 evidence=f"success variable '{success_var}' is returned to the caller",
             )
+        if _failure_observer_without_continuation(later, fn_node, failure_facts, success_facts):
+            return CallResultUsage(
+                status=CallResultStatus.CHECKED,
+                success_variable=success_var,
+                returndata_variable=returndata_var,
+                success_checked=True,
+                failure_handling_exists=True,
+                evidence=(
+                    f"failure observed without continuation effects for success variable "
+                    f"'{success_var}'"
+                ),
+            )
         _update_failure_facts(later, failure_facts)
+        _update_success_facts(later, success_facts)
 
     if not used:
         return CallResultUsage(
@@ -261,6 +282,41 @@ def _is_direct_condition_usage(
         if node_type in ("VariableDeclarationStatement", "Assignment", "Return"):
             break
     return False
+
+
+def _direct_failure_observer_without_continuation(
+    call_node: dict[str, Any],
+    fn_node: dict[str, Any],
+    parent_map: dict[int, dict[str, Any]],
+) -> bool:
+    if_node = _direct_condition_if(call_node, parent_map)
+    if if_node is None:
+        return False
+    condition = if_node.get("condition", {})
+    failure_value = _expression_value(condition, call_node=call_node, call_value=False, facts={})
+    success_value = _expression_value(condition, call_node=call_node, call_value=True, facts={})
+    return _observer_if_without_continuation(
+        if_node,
+        fn_node,
+        failure_condition_value=failure_value,
+        success_condition_value=success_value,
+    )
+
+
+def _direct_condition_if(
+    call_node: dict[str, Any], parent_map: dict[int, dict[str, Any]]
+) -> dict[str, Any] | None:
+    for ancestor in _ancestors(call_node, parent_map):
+        node_type = ancestor.get("nodeType")
+        if node_type == "IfStatement":
+            if _contains_node(ancestor.get("condition", {}), call_node):
+                return ancestor
+            return None
+        if node_type == "ExpressionStatement":
+            return None
+        if node_type in ("VariableDeclarationStatement", "Assignment", "Return"):
+            return None
+    return None
 
 
 def _is_returned_to_caller(
@@ -349,6 +405,45 @@ def _node_checks_failure(
     return False
 
 
+def _failure_observer_without_continuation(
+    node: dict[str, Any],
+    fn_node: dict[str, Any],
+    failure_facts: _FailureFacts,
+    success_facts: _FailureFacts,
+) -> bool:
+    if node.get("nodeType") != "IfStatement":
+        return False
+    condition = node.get("condition", {})
+    if not _node_references_failure_fact(condition, failure_facts):
+        return False
+    failure_value = _expression_value(condition, facts=failure_facts)
+    success_value = _expression_value(condition, facts=success_facts)
+    return _observer_if_without_continuation(
+        node,
+        fn_node,
+        failure_condition_value=failure_value,
+        success_condition_value=success_value,
+    )
+
+
+def _observer_if_without_continuation(
+    if_node: dict[str, Any],
+    fn_node: dict[str, Any],
+    *,
+    failure_condition_value: bool | None,
+    success_condition_value: bool | None,
+) -> bool:
+    if failure_condition_value is None or success_condition_value is None:
+        return False
+    if failure_condition_value == success_condition_value:
+        return False
+
+    failure_body = if_node.get("trueBody") if failure_condition_value else if_node.get("falseBody")
+    if not _body_is_event_only_observer(failure_body):
+        return False
+    return not _has_later_meaningful_effect(fn_node, if_node)
+
+
 def _if_failure_path_terminates(
     if_node: dict[str, Any],
     *,
@@ -383,10 +478,11 @@ def _check_call_fails_on_failure(
     )
 
 
-def _expression_value_on_failure(
+def _expression_value(
     node: Any,
     *,
     call_node: dict[str, Any] | None = None,
+    call_value: bool | None = None,
     facts: _FailureFacts | None = None,
 ) -> bool | None:
     if not isinstance(node, dict):
@@ -394,7 +490,7 @@ def _expression_value_on_failure(
 
     facts = facts or {}
     if call_node is not None and id(node) == id(call_node):
-        return False
+        return call_value
     if node.get("nodeType") == "Identifier":
         name = str(node.get("name") or "")
         if name in facts:
@@ -405,23 +501,26 @@ def _expression_value_on_failure(
 
     node_type = node.get("nodeType")
     if node_type == "UnaryOperation" and node.get("operator") == "!":
-        inner = _expression_value_on_failure(
+        inner = _expression_value(
             node.get("subExpression"),
             call_node=call_node,
+            call_value=call_value,
             facts=facts,
         )
         return None if inner is None else not inner
 
     if node_type == "BinaryOperation":
         operator = node.get("operator")
-        left = _expression_value_on_failure(
+        left = _expression_value(
             node.get("leftExpression"),
             call_node=call_node,
+            call_value=call_value,
             facts=facts,
         )
-        right = _expression_value_on_failure(
+        right = _expression_value(
             node.get("rightExpression"),
             call_node=call_node,
+            call_value=call_value,
             facts=facts,
         )
         if operator == "||":
@@ -441,6 +540,15 @@ def _expression_value_on_failure(
             return equal if operator == "==" else not equal
 
     return None
+
+
+def _expression_value_on_failure(
+    node: Any,
+    *,
+    call_node: dict[str, Any] | None = None,
+    facts: _FailureFacts | None = None,
+) -> bool | None:
+    return _expression_value(node, call_node=call_node, call_value=False, facts=facts)
 
 
 def _bool_literal_value(node: dict[str, Any]) -> bool | None:
@@ -486,6 +594,69 @@ def _node_always_terminates(node: Any) -> bool:
             node.get("falseBody")
         )
     return False
+
+
+def _body_is_event_only_observer(node: Any) -> bool:
+    if not isinstance(node, dict):
+        return False
+    node_type = node.get("nodeType")
+    if node_type == "EmitStatement":
+        return _emit_statement_is_observer_only(node)
+    if node_type not in ("Block", "UncheckedBlock"):
+        return False
+
+    statements = [stmt for stmt in node.get("statements", []) if isinstance(stmt, dict)]
+    if not statements:
+        return False
+    return all(
+        stmt.get("nodeType") == "EmitStatement" and _emit_statement_is_observer_only(stmt)
+        for stmt in statements
+    )
+
+
+def _emit_statement_is_observer_only(node: dict[str, Any]) -> bool:
+    event_call = node.get("eventCall")
+    if not isinstance(event_call, dict):
+        return False
+    for argument in event_call.get("arguments", []):
+        if _node_has_side_effecting_expression(argument):
+            return False
+    return True
+
+
+def _node_has_side_effecting_expression(node: Any) -> bool:
+    if not isinstance(node, dict):
+        return False
+    for child in _walk_nodes(node):
+        node_type = child.get("nodeType")
+        if node_type in ("Assignment", "FunctionCall", "FunctionCallOptions", "EmitStatement"):
+            return True
+        if node_type == "UnaryOperation" and child.get("operator") in ("++", "--"):
+            return True
+    return False
+
+
+def _has_later_meaningful_effect(fn_node: dict[str, Any], statement_node: dict[str, Any]) -> bool:
+    statement_end = _src_end(statement_node.get("src"))
+    if statement_end is None:
+        return True
+    body = fn_node.get("body", {})
+    for node in _walk_nodes(body):
+        node_start = _src_start(node.get("src"))
+        if node_start is None or node_start <= statement_end:
+            continue
+        if _node_is_meaningful_continuation_effect(node):
+            return True
+    return False
+
+
+def _node_is_meaningful_continuation_effect(node: dict[str, Any]) -> bool:
+    node_type = node.get("nodeType")
+    if node_type in ("Assignment", "EmitStatement", "VariableDeclarationStatement"):
+        return True
+    if node_type == "UnaryOperation" and node.get("operator") in ("++", "--"):
+        return True
+    return node_type == "FunctionCall" and _callee_name(node) not in _CHECK_CALLEES
 
 
 def _helper_check_functions(contract_node: dict[str, Any]) -> _HelperChecks:
@@ -676,6 +847,14 @@ def _followup_effects(
 
 
 def _update_failure_facts(node: dict[str, Any], facts: _FailureFacts) -> None:
+    _update_bool_facts(node, facts)
+
+
+def _update_success_facts(node: dict[str, Any], facts: _FailureFacts) -> None:
+    _update_bool_facts(node, facts)
+
+
+def _update_bool_facts(node: dict[str, Any], facts: _FailureFacts) -> None:
     node_type = node.get("nodeType")
     if node_type == "VariableDeclarationStatement":
         declarations = node.get("declarations", [])
@@ -816,6 +995,11 @@ def _function_display_name(fn_node: dict[str, Any]) -> str:
 def _src_start(src: Any) -> int | None:
     span = _src_span(src)
     return span[0] if span is not None else None
+
+
+def _src_end(src: Any) -> int | None:
+    span = _src_span(src)
+    return span[0] + span[1] if span is not None else None
 
 
 def _src_span(src: Any) -> tuple[int, int] | None:

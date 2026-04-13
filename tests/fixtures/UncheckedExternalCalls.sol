@@ -3,6 +3,7 @@ pragma solidity ^0.8.28;
 
 contract UncheckedExternalCalls {
     event Result(bool ok);
+    event Failed(address target, uint256 value);
 
     uint256 public count;
 
@@ -37,6 +38,36 @@ contract UncheckedExternalCalls {
     function successOnlyLogged(address payable target) external payable {
         bool ok = target.send(1 wei);
         emit Result(ok);
+    }
+
+    function failureOnlyEventObserver(address payable target) external payable {
+        bool res = target.send(1 wei);
+        if (!res) {
+            emit Failed(target, msg.value);
+        }
+    }
+
+    function failureOnlyEventObserverThenMutates(address payable target) external payable {
+        bool res = target.send(1 wei);
+        if (!res) {
+            emit Failed(target, msg.value);
+        }
+        count += 1;
+    }
+
+    function failureObserverBranchMutates(address payable target) external payable {
+        bool res = target.send(1 wei);
+        if (!res) {
+            emit Failed(target, msg.value);
+            count += 1;
+        }
+    }
+
+    function tautologicalEventObserver(address payable target) external payable {
+        bool res = target.send(1 wei);
+        if (!res || true) {
+            emit Failed(target, msg.value);
+        }
     }
 
     function checkedRequire(address target) external {
