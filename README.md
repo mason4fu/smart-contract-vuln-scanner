@@ -16,11 +16,12 @@ Supports both **source-level (AST)** and **bytecode-level (EVM)** analysis.
 | Foundry workspace | ✅ Complete |
 | CI pipelines | ✅ Complete |
 | Smoke tests | ✅ Complete |
-| Vulnerability detectors | ✅ Complete (access-control) |
+| Vulnerability detectors | ✅ Complete (access-control, unchecked external calls) |
 | Full analysis pipeline | ✅ Complete |
 
-The access control detector is fully implemented with source-level AST analysis
-and bytecode-level EVM analysis. Run `uv run scanner scan <file.sol>` to start scanning.
+The scanner includes access-control and unchecked external call detectors with
+source-level AST analysis and bytecode-level EVM analysis. Run
+`uv run scanner scan <file.sol>` to start scanning.
 
 ---
 
@@ -78,11 +79,44 @@ Detects access control vulnerabilities in Solidity contracts.
 
 See [`docs/access-control-detector.md`](docs/access-control-detector.md) for details.
 
+### `unchecked-external-calls` (implemented)
+
+Detects unchecked success handling for Solidity low-level external calls.
+
+| Rule | ID | Severity | Description |
+|------|----|----------|-------------|
+| Unchecked low-level call result | SWC-104 | MEDIUM | `.call`, `.delegatecall`, `.staticcall`, or `.send` success result is ignored, discarded, or not used as a failure gate |
+| Ambiguous bytecode call handling | SWC-104 | LOW/MEDIUM | Runtime bytecode contains CALL-family opcodes whose success handling is unclear without source |
+
+Examples:
+
+```powershell
+uv run scanner scan tests/fixtures/UncheckedExternalCalls.sol --detector unchecked-external-calls
+uv run scanner scan contracts/src --detector unchecked-external-calls --format json
+uv run scanner scan out/MyContract.sol/MyContract.json --detector unchecked-external-calls
+uv run scanner scan sample.bin --detector unchecked-external-calls --bytecode-only --format json
+```
+
+The detector treats `require(success)`, `assert(success)`, `if (!success) revert`,
+bounded success aliases such as `handled = success` or `failed = !success`,
+private/internal helper checks, returning success to the caller, and event-only
+failure observers with no later continuation effects as handled.
+It does not target high-level typed external calls or `.transfer(...)`.
+
+See [`docs/unchecked-external-calls.md`](docs/unchecked-external-calls.md) for details.
+
 ## Evaluation Datasets
 
 - **SmartBugs Curated** (18 access control contracts) — 100% precision, 100% recall, F1=1.000
 - **Not-So-Smart-Contracts** (3 contracts) — 100% precision, 100% recall, F1=1.000
 - **SWC Registry pinned subset** (10 contracts/snippets) — 100% precision, 100% recall, F1=1.000
+- **Unchecked external calls**:
+  - SmartBugs unchecked subset — precision 1.000, recall 1.000, F1=1.000
+  - SolidiFI Unhandled-Exceptions scoped subset — precision 1.000, recall 0.898, F1=0.946
+  - Not-So-Smart-Contracts unchecked external call — precision 1.000, recall 1.000, F1=1.000
+  - Primary scoped aggregate — precision 1.000, recall 0.918, F1=0.957
+  - Raw all-label diagnostic aggregate — precision 1.000, recall 0.508, F1=0.673
+  - Held-out Slither unchecked-lowlevel/unchecked-send fixtures — precision 1.000, recall 1.000, F1=1.000
 
 Run the access control detector against the evaluation datasets:
 
@@ -92,6 +126,8 @@ uv run python scripts/evaluate_smartbugs.py --output results.json
 uv run python scripts/evaluate_nssc.py
 uv run python scripts/fetch_swc_registry.py
 uv run python scripts/evaluate_swc_registry.py
+uv run python scripts/fetch_unchecked_call_datasets.py
+uv run python scripts/evaluate_unchecked_calls.py
 ```
 
 See [`docs/evaluation.md`](docs/evaluation.md) for methodology and results.

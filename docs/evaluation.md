@@ -7,6 +7,13 @@ The access control scanner is evaluated against three independent datasets:
 - Not-So-Smart-Contracts subset (function-level matching)
 - SWC Registry pinned subset fetched from upstream markdown samples (contract-level matching)
 
+The unchecked external call scanner is evaluated against three small public
+subsets with line-level matching:
+
+- SmartBugs Curated unchecked low-level calls subset
+- SolidiFI-benchmark Unchecked-Send and Unhandled-Exceptions injected samples
+- Not-So-Smart-Contracts unchecked_external_call example
+
 ## Datasets
 
 ### SmartBugs Curated
@@ -84,7 +91,84 @@ uv run python scripts/evaluate_nssc.py
 # Fetch and evaluate pinned SWC subset
 uv run python scripts/fetch_swc_registry.py
 uv run python scripts/evaluate_swc_registry.py
+
+# Fetch and evaluate unchecked external call datasets
+uv run python scripts/fetch_unchecked_call_datasets.py
+uv run python scripts/evaluate_unchecked_calls.py --output reports/unchecked-call-eval.json
 ```
+
+## Unchecked External Calls
+
+### Dataset Pins
+
+- **SmartBugs Curated**: `smartbugs/smartbugs-curated@230e649123477eff332742a59a1c7cc6dc286cab`
+- **SolidiFI-benchmark**: `DependableSystemsLab/SolidiFI-benchmark@4b0573e1b3f7031396de6f48f7f3e7380222ad3a`
+- **Not-So-Smart-Contracts**: `crytic/not-so-smart-contracts@020dbdbde3e0c2e8de5f3944e7455e438b0995d5`
+
+### Matching Protocol
+
+1. Fetch only the documented small subset into ignored `datasets/unchecked-external-calls/`.
+2. Compile each contract with the pragma-derived solc version, coercing pre-0.4.11 pragmas to 0.4.11 because py-solc-x cannot install older versions.
+3. Run the unchecked external call detector from compiler output.
+4. Match source findings to labeled vulnerable lines with one-to-one matching and a default `+/-6` line tolerance.
+5. Exclude compile failures from TP/FP/FN counts and report them separately.
+6. Use source-located findings for line-level PRF; bytecode findings are retained in JSON output as supporting evidence.
+7. Report SolidiFI `Unchecked-Send` entries separately because the selected samples use `.transfer(...)`, outside the SWC-104 low-level-call scope.
+
+### Current Results
+
+| Primary scoped dataset | Compiled | TP | FP | FN | Precision | Recall | F1 |
+|---------|----------|----|----|----|-----------|--------|----|
+| SmartBugs Curated unchecked subset | 5/5 | 10 | 0 | 0 | 1.000 | 1.000 | 1.000 |
+| SolidiFI Unhandled-Exceptions subset | 3/3 | 53 | 0 | 6 | 1.000 | 0.898 | 0.946 |
+| Not-So-Smart-Contracts unchecked external call | 1/1 | 4 | 0 | 0 | 1.000 | 1.000 | 1.000 |
+| Primary scoped aggregate | 9/9 | 67 | 0 | 6 | 1.000 | 0.918 | 0.957 |
+
+The raw all-label diagnostic aggregate is also printed for transparency. It
+includes the out-of-scope SolidiFI `Unchecked-Send` `.transfer(...)` labels and
+currently reports TP=67, FP=0, FN=65, precision=1.000, recall=0.508, F1=0.673.
+The aggregate should not be read as a general benchmark score because the three
+datasets have different origins and annotation styles.
+
+The six remaining scoped SolidiFI `Unhandled-Exceptions` false negatives are
+labels on `if (!addr.send(...) || 1==1) { revert(); }` injected patterns. The
+detector intentionally leaves these as checked because the failure path always
+enters a terminating branch, so execution cannot continue past the low-level
+call failure.
+
+### Held-Out Slither Validation
+
+After refining event-only failure observers, the unchecked external call
+detector was also checked against Slither's upstream detector fixtures without
+adding those files to the repository. The validation used only:
+
+- `tests/e2e/detectors/test_data/unchecked-lowlevel/{0.4.25,0.5.16,0.6.11,0.7.6}/unchecked_lowlevel.sol`
+- `tests/e2e/detectors/test_data/unchecked-send/{0.4.25,0.5.16,0.6.11,0.7.6}/unchecked_send.sol`
+- the matching `UncheckedLowLevel` and `UncheckedSend` snapshot files under `tests/e2e/detectors/snapshots/`
+
+Protocol: compile each fixture with its versioned solc, run source-level
+unchecked-call detection only, parse each Slither snapshot's expression source
+line, and require exact source-line matches.
+
+| Held-out Slither subset | TP | FP | FN | Precision | Recall | F1 |
+|---------|----|----|----|-----------|--------|----|
+| unchecked-lowlevel | 4 | 0 | 0 | 1.000 | 1.000 | 1.000 |
+| unchecked-send | 4 | 0 | 0 | 1.000 | 1.000 | 1.000 |
+| Combined | 8 | 0 | 0 | 1.000 | 1.000 | 1.000 |
+
+The Slither `unchecked-send` fixture includes a checked observer pattern:
+`bool res = dst.send(msg.value); if (!res) { emit Failed(dst, msg.value); }`.
+The detector classifies this narrow event-only failure observer as handled only
+when no meaningful branch-local or later continuation effects are present.
+
+### Limitations
+
+- The SolidiFI subset uses injected fault logs rather than hand-curated exploit lines.
+- SolidiFI `Unchecked-Send` labels in this selected subset are `.transfer(...)` examples and are outside this detector's scope.
+- Some injected unhandled-exception patterns are outside the current low-level call focus.
+- The detector is evaluated against SolidiFI for pressure testing without adding `.transfer(...)` to SWC-104.
+- Bytecode-only findings do not participate in line-level precision/recall unless source maps are later added.
+- Alias and helper reasoning is conservative: it tracks bounded intra-function bool aliases and private/internal helper chains, but does not perform broad symbolic execution.
 
 ## Methodology
 
@@ -113,6 +197,6 @@ uv run python scripts/evaluate_swc_registry.py
 
 ## Limitations
 - 5/18 SmartBugs contracts fail to compile (legacy Solidity syntax)
-- Line tolerance=5 may cause FP/FN near closely-spaced vulnerabilities
+- Line-level matching can still be sensitive to clustered labels near closely-spaced vulnerabilities
 - Bytecode analysis does not use the legacy AST, so it works uniformly across Solidity versions
 - Some SmartBugs contracts import files not present in the dataset (e.g., SafeMath), causing compilation failures counted as compile errors rather than false negatives

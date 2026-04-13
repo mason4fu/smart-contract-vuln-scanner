@@ -1,0 +1,238 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.28;
+
+contract UncheckedExternalCalls {
+    event Result(bool ok);
+    event Failed(address target, uint256 value);
+
+    uint256 public count;
+
+    function uncheckedCall(address target) external {
+        target.call("");
+        count += 1;
+    }
+
+    function uncheckedDelegate(address target) external {
+        target.delegatecall("");
+    }
+
+    function uncheckedStatic(address target) external view {
+        target.staticcall("");
+    }
+
+    function uncheckedSend(address payable target) external payable {
+        target.send(1 wei);
+    }
+
+    function tupleAssignedNeverChecked(address target) external {
+        (bool success, bytes memory data) = target.call("");
+        data;
+        count += 1;
+    }
+
+    function onlyReturndataCaptured(address target) external {
+        (, bytes memory data) = target.call("");
+        require(data.length >= 0, "returndata touched");
+    }
+
+    function successOnlyLogged(address payable target) external payable {
+        bool ok = target.send(1 wei);
+        emit Result(ok);
+    }
+
+    function failureOnlyEventObserver(address payable target) external payable {
+        bool res = target.send(1 wei);
+        if (!res) {
+            emit Failed(target, msg.value);
+        }
+    }
+
+    function failureOnlyEventObserverThenMutates(address payable target) external payable {
+        bool res = target.send(1 wei);
+        if (!res) {
+            emit Failed(target, msg.value);
+        }
+        count += 1;
+    }
+
+    function failureObserverBranchMutates(address payable target) external payable {
+        bool res = target.send(1 wei);
+        if (!res) {
+            emit Failed(target, msg.value);
+            count += 1;
+        }
+    }
+
+    function tautologicalEventObserver(address payable target) external payable {
+        bool res = target.send(1 wei);
+        if (!res || true) {
+            emit Failed(target, msg.value);
+        }
+    }
+
+    function checkedRequire(address target) external {
+        (bool success,) = target.call("");
+        require(success, "call failed");
+        count += 1;
+    }
+
+    function checkedAssert(address payable target) external payable {
+        bool success = target.send(1 wei);
+        assert(success);
+    }
+
+    function checkedIfRevert(address payable target) external payable {
+        bool success = target.send(1 wei);
+        if (!success) {
+            revert("send failed");
+        }
+        count += 1;
+    }
+
+    function aliasChecked(address target) external {
+        (bool ok,) = target.call("");
+        bool handled = ok;
+        require(handled, "call failed");
+        count += 1;
+    }
+
+    function aliasUncheckedLogged(address target) external {
+        (bool ok,) = target.call("");
+        bool handled = ok;
+        emit Result(handled);
+        count += 1;
+    }
+
+    function invertedAliasChecked(address target) external {
+        (bool ok,) = target.call("");
+        bool failed = !ok;
+        if (failed) {
+            revert("call failed");
+        }
+        count += 1;
+    }
+
+    function uncheckedIfObserver(address payable target) external payable {
+        if (!target.send(1 wei)) {
+            count += 1;
+        }
+    }
+
+    function uncheckedIfOrObserver(address payable target) external payable {
+        if (!target.send(1 wei) || true) {
+            count += 1;
+        }
+    }
+
+    function checkedDirectIfReturn(address payable target) external payable {
+        if (!target.send(1 wei)) {
+            return;
+        }
+        count += 1;
+    }
+
+    function checkedDirectIfElseRevert(address payable target) external payable {
+        if (target.send(1 wei)) {
+            count += 1;
+        } else {
+            revert("send failed");
+        }
+    }
+
+    function nestedBranchFailureContinues(address target) external {
+        (bool ok,) = target.call("");
+        bool failed = !ok;
+        if (failed) {
+            if (count > 0) {
+                revert("sometimes");
+            }
+            count += 1;
+        }
+    }
+
+    function nestedBranchFailureTerminates(address target) external {
+        (bool ok,) = target.call("");
+        bool failed = !ok;
+        if (failed) {
+            if (count > 0) {
+                revert("always");
+            } else {
+                return;
+            }
+        }
+        count += 1;
+    }
+
+    function checkedHelper(address target) external {
+        (bool success,) = target.call("");
+        _requireSuccess(success);
+        count += 1;
+    }
+
+    function helperChainChecked(address target) external {
+        (bool success,) = target.call("");
+        _outerRequireSuccess(success);
+        count += 1;
+    }
+
+    function helperInvertedChecked(address target) external {
+        (bool success,) = target.call("");
+        bool failed = !success;
+        _revertIfFailed(failed);
+        count += 1;
+    }
+
+    function helperNonGatingUnchecked(address target) external {
+        (bool success,) = target.call("");
+        _observeSuccess(success);
+        count += 1;
+    }
+
+    function helperReturnUnchecked(address target) external {
+        (bool success,) = target.call("");
+        _returnOnFailure(success);
+        count += 1;
+    }
+
+    function returnsSuccess(address payable target) external payable returns (bool) {
+        return target.send(1 wei);
+    }
+
+    function transferOutOfScope(address payable target) external payable {
+        target.transfer(1 wei);
+    }
+
+    function mixed(address target) external {
+        target.call("");
+        (bool success,) = target.call("");
+        require(success, "checked");
+    }
+
+    function _requireSuccess(bool success) internal pure {
+        require(success, "low-level call failed");
+    }
+
+    function _outerRequireSuccess(bool success) internal pure {
+        _innerRequireSuccess(success);
+    }
+
+    function _innerRequireSuccess(bool success) private pure {
+        require(success, "inner low-level call failed");
+    }
+
+    function _revertIfFailed(bool failed) internal pure {
+        if (failed) {
+            revert("low-level call failed");
+        }
+    }
+
+    function _observeSuccess(bool success) internal {
+        emit Result(success);
+    }
+
+    function _returnOnFailure(bool success) internal pure {
+        if (!success) {
+            return;
+        }
+    }
+}

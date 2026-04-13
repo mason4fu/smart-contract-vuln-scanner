@@ -61,18 +61,21 @@ for known vulnerability patterns. It operates at two levels:
 ### `scanner.ast`
 - Extracts AST from compiler output
 - Provides tree-walking and node-filtering utilities
+- Extracts detector-specific source IR such as unchecked low-level call sites
 - Future: visitor pattern for detectors
 
 ### `scanner.bytecode`
 - Extracts creation and deployed bytecode
 - Loads raw bytecode from files
 - Disassembles to EVM instructions via pyevmasm
+- Provides lightweight opcode heuristics for CALL-family result handling
 - Future: control flow graph construction
 
 ### `scanner.models`
 - `Finding` – represents a single vulnerability instance
 - `Severity` – classification (critical/high/medium/low/info)
 - `SourceLocation` – points into source code
+- `ExternalCallSite`, `CallResultUsage`, `FollowupEffect` – unchecked call IR
 - Future: `DetectorResult`, `ScanReport` aggregates
 
 ### `scanner.output`
