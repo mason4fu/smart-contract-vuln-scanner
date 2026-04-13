@@ -99,7 +99,8 @@ uv run scanner scan sample.bin --detector unchecked-external-calls --bytecode-on
 
 The detector treats `require(success)`, `assert(success)`, `if (!success) revert`,
 bounded success aliases such as `handled = success` or `failed = !success`,
-private/internal helper checks, and returning success to the caller as handled.
+private/internal helper checks, returning success to the caller, and event-only
+failure observers with no later continuation effects as handled.
 It does not target high-level typed external calls or `.transfer(...)`.
 
 See [`docs/unchecked-external-calls.md`](docs/unchecked-external-calls.md) for details.
@@ -115,6 +116,7 @@ See [`docs/unchecked-external-calls.md`](docs/unchecked-external-calls.md) for d
   - Not-So-Smart-Contracts unchecked external call — precision 1.000, recall 1.000, F1=1.000
   - Primary scoped aggregate — precision 1.000, recall 0.918, F1=0.957
   - Raw all-label diagnostic aggregate — precision 1.000, recall 0.508, F1=0.673
+  - Held-out Slither unchecked-lowlevel/unchecked-send fixtures — precision 1.000, recall 1.000, F1=1.000
 
 Run the access control detector against the evaluation datasets:
 

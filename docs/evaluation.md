@@ -136,6 +136,31 @@ detector intentionally leaves these as checked because the failure path always
 enters a terminating branch, so execution cannot continue past the low-level
 call failure.
 
+### Held-Out Slither Validation
+
+After refining event-only failure observers, the unchecked external call
+detector was also checked against Slither's upstream detector fixtures without
+adding those files to the repository. The validation used only:
+
+- `tests/e2e/detectors/test_data/unchecked-lowlevel/{0.4.25,0.5.16,0.6.11,0.7.6}/unchecked_lowlevel.sol`
+- `tests/e2e/detectors/test_data/unchecked-send/{0.4.25,0.5.16,0.6.11,0.7.6}/unchecked_send.sol`
+- the matching `UncheckedLowLevel` and `UncheckedSend` snapshot files under `tests/e2e/detectors/snapshots/`
+
+Protocol: compile each fixture with its versioned solc, run source-level
+unchecked-call detection only, parse each Slither snapshot's expression source
+line, and require exact source-line matches.
+
+| Held-out Slither subset | TP | FP | FN | Precision | Recall | F1 |
+|---------|----|----|----|-----------|--------|----|
+| unchecked-lowlevel | 4 | 0 | 0 | 1.000 | 1.000 | 1.000 |
+| unchecked-send | 4 | 0 | 0 | 1.000 | 1.000 | 1.000 |
+| Combined | 8 | 0 | 0 | 1.000 | 1.000 | 1.000 |
+
+The Slither `unchecked-send` fixture includes a checked observer pattern:
+`bool res = dst.send(msg.value); if (!res) { emit Failed(dst, msg.value); }`.
+The detector classifies this narrow event-only failure observer as handled only
+when no meaningful branch-local or later continuation effects are present.
+
 ### Limitations
 
 - The SolidiFI subset uses injected fault logs rather than hand-curated exploit lines.

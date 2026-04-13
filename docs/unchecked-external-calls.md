@@ -35,6 +35,9 @@ Handled patterns include:
 - inverted aliases such as `bool failed = !success; if (failed) revert`
 - bounded private/internal helper checks such as `_requireSuccess(success)`
 - returning the success value from the current function
+- event-only failure observers such as `if (!success) emit Failed(...)` when
+  the failure branch has no other effects and the function has no later
+  continuation effects
 
 Reported patterns include:
 
@@ -42,6 +45,10 @@ Reported patterns include:
 - tuple assignment where `success` is assigned but never checked
 - tuple assignment where only returndata is captured
 - success values used only in logs, state writes, or non-gating calls
+- event-only failure observers followed by state mutation, another call, value
+  transfer, or any other meaningful continuation effect
+- observer branches that also mutate state, assign values, or perform calls
+- tautological or non-failure-only observer conditions such as `!success || true`
 - helpers that only log, mutate state, call non-gating functions, or `return`
   from the helper without terminating the caller
 - sensitive follow-up effects before a clear failure gate
@@ -92,6 +99,16 @@ The remaining six scoped SolidiFI `Unhandled-Exceptions` false negatives are
 labels on `if (!addr.send(...) || 1==1) { revert(); }` patterns. The detector
 keeps these classified as checked because failure cannot continue past the
 always-reverting branch.
+
+Held-out Slither validation used exact source-line matching against the
+`UncheckedLowLevel` and `UncheckedSend` snapshot expression lines for Solidity
+0.4.25, 0.5.16, 0.6.11, and 0.7.6 fixtures:
+
+| Held-out Slither subset | TP | FP | FN | Precision | Recall | F1 |
+|---------|----|----|----|-----------|--------|----|
+| unchecked-lowlevel | 4 | 0 | 0 | 1.000 | 1.000 | 1.000 |
+| unchecked-send | 4 | 0 | 0 | 1.000 | 1.000 | 1.000 |
+| Combined | 8 | 0 | 0 | 1.000 | 1.000 | 1.000 |
 
 ## Known Limitations
 
