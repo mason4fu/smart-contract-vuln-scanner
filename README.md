@@ -16,11 +16,11 @@ Supports both **source-level (AST)** and **bytecode-level (EVM)** analysis.
 | Foundry workspace | ✅ Complete |
 | CI pipelines | ✅ Complete |
 | Smoke tests | ✅ Complete |
-| Vulnerability detectors | ✅ Complete (access-control, unchecked external calls) |
+| Vulnerability detectors | ✅ Complete (access-control, reentrancy, unchecked external calls) |
 | Full analysis pipeline | ✅ Complete |
 
-The scanner includes access-control and unchecked external call detectors with
-source-level AST analysis and bytecode-level EVM analysis. Run
+The scanner includes access-control, reentrancy, and unchecked external call
+detectors with source-level AST analysis and bytecode-level EVM analysis. Run
 `uv run scanner scan <file.sol>` to start scanning.
 
 ---
@@ -78,6 +78,24 @@ Detects access control vulnerabilities in Solidity contracts.
 | Unguarded Role Grant | SWC-105 | HIGH | Role/privilege grant function with no authorization guard |
 
 See [`docs/access-control-detector.md`](docs/access-control-detector.md) for details.
+
+### `reentrancy` (implemented)
+
+Detects potential reentrancy vulnerabilities in Solidity contracts.
+
+| Rule | ID | Severity | Description |
+|------|----|----------|-------------|
+| External call before state update | SWC-107 | HIGH | Function performs external CALL-family interaction before a later state write (checks-effects-interactions violation risk) |
+| Bytecode corroboration (confidence boost) | SWC-107 | MEDIUM/HIGH confidence | Deployed runtime bytecode shows CALL-family opcode before later SSTORE, used as corroborating heuristic |
+
+Examples:
+
+```powershell
+uv run scanner scan tests/fixtures/ReentrancyPatterns.sol --detector reentrancy
+uv run scanner scan contracts/src --detector reentrancy --format json
+```
+
+See `src/scanner/detectors/reentrancy.py` and `tests/test_reentrancy_detector.py` for details.
 
 ### `unchecked-external-calls` (implemented)
 
