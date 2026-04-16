@@ -1,13 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-/// @notice Demonstrates a compact and safe owner-guarded admin surface.
+/// @notice Combined safe access-control demo for class presentation.
 contract DemoAccessControlSafe {
     address public owner;
-    uint256 public feeBps;
+    address public treasury;
+    mapping(address => bool) public isAdmin;
+    uint256 public totalWithdrawn;
 
-    constructor() {
+    constructor() payable {
         owner = msg.sender;
+        treasury = msg.sender;
+        isAdmin[msg.sender] = true;
     }
 
     modifier onlyOwner() {
@@ -15,13 +19,30 @@ contract DemoAccessControlSafe {
         _;
     }
 
-    // Safe: ownership change is guarded by onlyOwner.
-    function setOwner(address newOwner) external onlyOwner {
-        owner = newOwner;
+    // Safe: sensitive transfer is owner-gated.
+    function withdraw(address payable to, uint256 amount) external onlyOwner {
+        totalWithdrawn += amount;
+        to.transfer(amount);
     }
 
-    // Safe: config update is also owner-gated.
-    function setFeeBps(uint256 newFeeBps) external onlyOwner {
-        feeBps = newFeeBps;
+    // Safe: ownership change is restricted.
+    function setOwner(address newOwner) external onlyOwner {
+        require(newOwner != address(0), "zero owner");
+        owner = newOwner;
+        isAdmin[newOwner] = true;
+    }
+
+    // Safe: role grants are owner-gated.
+    function grantAdmin(address account) external onlyOwner {
+        isAdmin[account] = true;
+    }
+
+    // Safe: treasury changes are owner-gated.
+    function setTreasury(address newTreasury) external onlyOwner {
+        treasury = newTreasury;
+    }
+
+    function treasuryAddress() external view returns (address) {
+        return treasury;
     }
 }
