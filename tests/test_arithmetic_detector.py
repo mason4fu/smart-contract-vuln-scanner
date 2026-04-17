@@ -5,8 +5,13 @@ from __future__ import annotations
 from typer.testing import CliRunner
 
 from scanner.cli import app
+from scanner.bytecode.loader import ContractBytecode
 from scanner.detectors import DETECTOR_REGISTRY, get_all_detectors
-from scanner.detectors.arithmetic import ArithmeticDetector, detect_arithmetic
+from scanner.detectors.arithmetic import (
+    ArithmeticDetector,
+    detect_arithmetic,
+    detect_arithmetic_bytecode,
+)
 
 runner = CliRunner()
 
@@ -78,3 +83,15 @@ def test_get_all_detectors_includes_arithmetic():
 
     names = [d.name for d in get_all_detectors()]
     assert "arithmetic" in names
+
+
+def test_bytecode_hint_reports_add_before_sstore():
+    bc = ContractBytecode(
+        contract_name="RawArithmetic",
+        creation_bytecode="",
+        deployed_bytecode="6001600201600055",
+    )
+    findings = detect_arithmetic_bytecode(bc)
+    assert len(findings) == 1
+    assert findings[0].swc_id == "SWC-101"
+    assert findings[0].confidence == "low"

@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from scanner.bytecode.disasm import disassemble
 from scanner.bytecode.loader import ContractBytecode
 from scanner.detectors import BaseDetector, register_detector
 from scanner.models.findings import Finding, Severity, SourceLocation
@@ -28,6 +29,7 @@ _SENSITIVE_CALL_HINTS = re.compile(
     r"(transfer|send|mint|burn|withdraw|deposit|payout|redeem)",
     re.IGNORECASE,
 )
+_ARITHMETIC_MNEMONICS = {"ADD", "SUB", "MUL"}
 
 
 @register_detector
@@ -51,7 +53,10 @@ class ArithmeticDetector(BaseDetector):
         bytecodes: list[ContractBytecode],
         extra: dict[str, Any] | None = None,
     ) -> list[Finding]:
-        return []
+        findings: list[Finding] = []
+        for bytecode in bytecodes:
+            findings.extend(detect_arithmetic_bytecode(bytecode))
+        return findings
 
 
 def detect_arithmetic(compiler_output: dict[str, Any]) -> list[Finding]:
@@ -95,6 +100,50 @@ def detect_arithmetic(compiler_output: dict[str, Any]) -> list[Finding]:
                 if is_unchecked_fn:
                     continue
     return findings
+
+
+def detect_arithmetic_bytecode(bytecode: ContractBytecode) -> list[Finding]:
+    """Optional bytecode fallback: arithmetic op near SSTORE.
+
+    This is intentionally heuristic and low-confidence.
+    """
+    raw = (bytecode.deployed_bytecode or bytecode.creation_bytecode or "").strip()
+    if raw.startswith("0x"):
+        raw = raw[2:]
+    if not raw:
+        return []
+    try:
+        instructions = disassemble(raw)
+    except (OSError, ValueError):
+        return []
+
+    for idx, insn in enumerate(instructions):
+        mnemonic = _instruction_mnemonic(insn)
+        if mnemonic not in _ARITHMETIC_MNEMONICS:
+            continue
+        window = instructions[idx + 1 : idx + 9]
+        if any(_instruction_mnemonic(next_insn) == "SSTORE" for next_insn in window):
+            return [
+                Finding(
+                    detector=_DETECTOR_NAME,
+                    title="Potential arithmetic overflow/underflow (bytecode heuristic)",
+                    description=(
+                        f"Contract '{bytecode.contract_name}' runtime bytecode contains "
+                        f"{mnemonic} followed by SSTORE in a short window. This can indicate "
+                        "unchecked arithmetic affecting storage in pre-0.8.0-style code. "
+                        "Bytecode-only evidence is heuristic and should be verified against source."
+                    ),
+                    severity=Severity.LOW,
+                    confidence="low",
+                    contract=bytecode.contract_name,
+                    swc_id="SWC-101",
+                    remediation=(
+                        "Review source arithmetic around storage updates and ensure bounds checks "
+                        "or checked arithmetic semantics."
+                    ),
+                )
+            ]
+    return []
 
 
 def _evaluate_node(
@@ -366,3 +415,11 @@ def _detect_version_tuple(source: str) -> tuple[int, int, int] | None:
     # Conservative for v1: use the first explicit version literal.
     major, minor, patch = nums[0].split(".")
     return int(major), int(minor), int(patch)
+
+
+def _instruction_mnemonic(instr: Any) -> str:
+    for attr in ("mnemonic", "name"):
+        v = getattr(instr, attr, None)
+        if isinstance(v, str):
+            return v.upper()
+    return ""
