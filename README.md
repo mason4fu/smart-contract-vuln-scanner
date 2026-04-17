@@ -82,13 +82,13 @@ See [`docs/access-control-detector.md`](docs/access-control-detector.md) for det
 
 ### `reentrancy` (implemented)
 
-Detects potential reentrancy patterns where an external interaction can happen
-before state effects.
+Detects potential reentrancy vulnerabilities in Solidity contracts (external
+interaction before state effects / checks-effects-interactions risk).
 
 | Rule | ID | Severity | Description |
 |------|----|----------|-------------|
-| External call before state update | SWC-107 | HIGH | Function performs a CALL-family interaction before a later state write |
-| Bytecode corroboration | SWC-107 | Medium->High confidence | Runtime bytecode CALL-family before later SSTORE increases confidence |
+| External call before state update | SWC-107 | HIGH | Function performs external CALL-family interaction before a later state write (checks-effects-interactions violation risk) |
+| Bytecode corroboration (confidence boost) | SWC-107 | MEDIUM/HIGH confidence | Deployed runtime bytecode shows CALL-family opcode before later SSTORE, used as corroborating heuristic |
 
 Examples:
 
