@@ -150,6 +150,7 @@ def scan(
     """
     # Ensure detectors are registered with the class registry
     import scanner.detectors.access_control  # noqa: F401
+    import scanner.detectors.arithmetic  # noqa: F401
     import scanner.detectors.reentrancy  # noqa: F401
     import scanner.detectors.unchecked_external_calls  # noqa: F401
     from scanner.ast.analysis import analyze_source

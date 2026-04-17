@@ -145,3 +145,18 @@ def compiled_reentrancy_patterns():
 @pytest.fixture(scope="session")
 def compiled_reentrancy_safe_only():
     return compile_sol_fixture("ReentrancySafeOnly.sol")
+
+
+@pytest.fixture(scope="session")
+def compiled_arithmetic_patterns():
+    return compile_sol_fixture("ArithmeticPatterns.sol", version="0.4.25")
+
+
+@pytest.fixture(scope="session")
+def compiled_arithmetic_safe_08():
+    return compile_sol_fixture("ArithmeticSafe08.sol")
+
+
+@pytest.fixture(scope="session")
+def compiled_arithmetic_unchecked_08():
+    return compile_sol_fixture("ArithmeticUnchecked08.sol")
