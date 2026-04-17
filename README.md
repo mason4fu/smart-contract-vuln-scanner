@@ -16,11 +16,12 @@ Supports both **source-level (AST)** and **bytecode-level (EVM)** analysis.
 | Foundry workspace | ✅ Complete |
 | CI pipelines | ✅ Complete |
 | Smoke tests | ✅ Complete |
-| Vulnerability detectors | ✅ Complete (access-control, unchecked external calls) |
+| Vulnerability detectors | ✅ Complete (access-control, reentrancy, unchecked external calls, arithmetic) |
 | Full analysis pipeline | ✅ Complete |
 
-The scanner includes access-control and unchecked external call detectors with
-source-level AST analysis and bytecode-level EVM analysis. Run
+The scanner includes access-control, reentrancy, unchecked external call, and
+arithmetic detectors with source-level AST analysis and bytecode-level EVM
+analysis. Run
 `uv run scanner scan <file.sol>` to start scanning.
 
 ---
@@ -79,6 +80,25 @@ Detects access control vulnerabilities in Solidity contracts.
 
 See [`docs/access-control-detector.md`](docs/access-control-detector.md) for details.
 
+### `reentrancy` (implemented)
+
+Detects potential reentrancy patterns where an external interaction can happen
+before state effects.
+
+| Rule | ID | Severity | Description |
+|------|----|----------|-------------|
+| External call before state update | SWC-107 | HIGH | Function performs a CALL-family interaction before a later state write |
+| Bytecode corroboration | SWC-107 | Medium->High confidence | Runtime bytecode CALL-family before later SSTORE increases confidence |
+
+Examples:
+
+```powershell
+uv run scanner scan tests/fixtures/ReentrancyPatterns.sol --detector reentrancy
+uv run scanner scan contracts/src --detector reentrancy --format json
+```
+
+See `src/scanner/detectors/reentrancy.py` and `tests/test_reentrancy_detector.py` for details.
+
 ### `unchecked-external-calls` (implemented)
 
 Detects unchecked success handling for Solidity low-level external calls.
@@ -105,6 +125,27 @@ It does not target high-level typed external calls or `.transfer(...)`.
 
 See [`docs/unchecked-external-calls.md`](docs/unchecked-external-calls.md) for details.
 
+### `arithmetic` (implemented)
+
+Detects potential integer overflow/underflow in risky arithmetic patterns
+(`+`, `-`, `*`, compound updates, unary increments/decrements), with emphasis on
+pre-0.8.0 semantics and 0.8+ `unchecked` blocks.
+
+| Rule | ID | Severity | Description |
+|------|----|----------|-------------|
+| Unchecked state/accounting arithmetic | SWC-101 | HIGH | Risky arithmetic updates state/accounting values without recognized guard |
+| Sensitive-path arithmetic construction | SWC-101 | HIGH/MEDIUM | Arithmetic feeds transfer/mint/burn/value-sensitive behavior |
+| Bytecode arithmetic hint | SWC-101 | LOW | Bytecode-only arithmetic-opcode near SSTORE heuristic |
+
+Examples:
+
+```powershell
+uv run scanner scan tests/fixtures/ArithmeticPatterns.sol --detector arithmetic --solc-version 0.4.25
+uv run scanner scan tests/fixtures/ArithmeticUnchecked08.sol --detector arithmetic --format json
+```
+
+See [`docs/arithmetic-detector-spec.md`](docs/arithmetic-detector-spec.md) for the rule/suppression matrix.
+
 ## Evaluation Datasets
 
 - **SmartBugs Curated** (18 access control contracts) — 100% precision, 100% recall, F1=1.000
@@ -117,6 +158,10 @@ See [`docs/unchecked-external-calls.md`](docs/unchecked-external-calls.md) for d
   - Primary scoped aggregate — precision 1.000, recall 0.918, F1=0.957
   - Raw all-label diagnostic aggregate — precision 1.000, recall 0.508, F1=0.673
   - Held-out Slither unchecked-lowlevel/unchecked-send fixtures — precision 1.000, recall 1.000, F1=1.000
+- **Arithmetic (SmartBugs curated arithmetic subset, line-level ±6)**:
+  - Compiled 15/15
+  - TP=19, FP=5, FN=4
+  - precision 0.792, recall 0.826, F1=0.809
 
 Run the access control detector against the evaluation datasets:
 
@@ -128,6 +173,7 @@ uv run python scripts/fetch_swc_registry.py
 uv run python scripts/evaluate_swc_registry.py
 uv run python scripts/fetch_unchecked_call_datasets.py
 uv run python scripts/evaluate_unchecked_calls.py
+uv run python scripts/evaluate_arithmetic.py --output reports/arithmetic-eval.json
 ```
 
 See [`docs/evaluation.md`](docs/evaluation.md) for methodology and results.
