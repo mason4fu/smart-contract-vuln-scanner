@@ -160,8 +160,8 @@ See [`docs/arithmetic-detector-spec.md`](docs/arithmetic-detector-spec.md) for t
   - Held-out Slither unchecked-lowlevel/unchecked-send fixtures — precision 1.000, recall 1.000, F1=1.000
 - **Arithmetic (SmartBugs curated arithmetic subset, line-level ±6)**:
   - Compiled 15/15
-  - TP=19, FP=5, FN=4
-  - precision 0.792, recall 0.826, F1=0.809
+  - TP=21, FP=1, FN=2
+  - precision 0.955, recall 0.913, F1=0.933
 
 Run the access control detector against the evaluation datasets:
 

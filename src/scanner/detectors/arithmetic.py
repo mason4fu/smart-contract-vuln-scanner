@@ -74,9 +74,14 @@ def detect_arithmetic(compiler_output: dict[str, Any]) -> list[Finding]:
 
         for contract in _find_nodes(ast_root, "ContractDefinition"):
             contract_name = str(contract.get("name", ""))
+            contract_kind = str(contract.get("contractKind", "contract"))
+            if contract_kind == "library":
+                continue
             state_vars = _state_vars(contract)
             for function in _find_nodes(contract, "FunctionDefinition"):
                 if function.get("implemented") is False:
+                    continue
+                if function.get("kind") == "constructor" or bool(function.get("isConstructor", False)):
                     continue
                 fn_name = _function_name(function)
                 is_unchecked_fn = False
@@ -93,7 +98,6 @@ def detect_arithmetic(compiler_output: dict[str, Any]) -> list[Finding]:
                     )
                     if finding is None:
                         continue
-                    # Keep only one finding per function for v1 precision-first behavior.
                     findings.append(finding)
                     is_unchecked_fn = True
                     break
@@ -199,7 +203,7 @@ def _evaluate_node(
         return None
     if _suppressed_by_version(source_version, ancestors):
         return None
-    if _has_explicit_bound_guard(ancestors):
+    if _has_explicit_bound_guard(expr_for_checks, ancestors):
         return None
 
     if writes_state:
@@ -338,7 +342,24 @@ def _inside_unchecked_block(ancestors: list[dict[str, Any]]) -> bool:
     return False
 
 
-def _has_explicit_bound_guard(ancestors: list[dict[str, Any]]) -> bool:
+def _has_explicit_bound_guard(
+    target_expr: dict[str, Any], ancestors: list[dict[str, Any]]
+) -> bool:
+    target_binary: dict[str, Any] | None = None
+    if target_expr.get("nodeType") == "BinaryOperation" and target_expr.get("operator") in _RISKY_BINARY_OPS:
+        target_binary = target_expr
+    elif target_expr.get("nodeType") == "Assignment":
+        rhs = target_expr.get("rightHandSide")
+        if isinstance(rhs, dict) and rhs.get("nodeType") == "BinaryOperation":
+            if rhs.get("operator") in _RISKY_BINARY_OPS:
+                target_binary = rhs
+    if target_binary is None:
+        return False
+
+    target_op = str(target_binary.get("operator", ""))
+    left_sig = _expr_signature(target_binary.get("leftExpression"))
+    right_sig = _expr_signature(target_binary.get("rightExpression"))
+
     for anc in reversed(ancestors):
         if anc.get("nodeType") != "FunctionDefinition":
             continue
@@ -358,8 +379,26 @@ def _has_explicit_bound_guard(ancestors: list[dict[str, Any]]) -> bool:
             if not isinstance(cond, dict):
                 continue
             for b in _find_nodes(cond, "BinaryOperation"):
-                op = b.get("operator")
-                if isinstance(op, str) and op in _RISKY_BINARY_OPS:
+                cmp_op = b.get("operator")
+                if cmp_op not in {">=", ">", "<=", "<", "=="}:
+                    continue
+                lhs = b.get("leftExpression")
+                rhs = b.get("rightExpression")
+                if not isinstance(lhs, dict) or not isinstance(rhs, dict):
+                    continue
+                if lhs.get("nodeType") != "BinaryOperation":
+                    continue
+                if lhs.get("operator") != target_op:
+                    continue
+                guard_left = _expr_signature(lhs.get("leftExpression"))
+                guard_right = _expr_signature(lhs.get("rightExpression"))
+                if guard_left != left_sig or guard_right != right_sig:
+                    continue
+
+                rhs_sig = _expr_signature(rhs)
+                # v1 safe suppression only for classic additive overflow check:
+                # require(a + b >= a) or require(a + b >= b)
+                if target_op == "+" and cmp_op in {">=", ">"} and rhs_sig in {left_sig, right_sig}:
                     return True
         return False
     return False
@@ -423,3 +462,26 @@ def _instruction_mnemonic(instr: Any) -> str:
         if isinstance(v, str):
             return v.upper()
     return ""
+
+
+def _expr_signature(expr: Any) -> str:
+    if not isinstance(expr, dict):
+        return ""
+    nt = expr.get("nodeType")
+    if nt == "Identifier":
+        return f"id:{expr.get('name','')}"
+    if nt == "Literal":
+        return f"lit:{expr.get('value','')}"
+    if nt == "IndexAccess":
+        base = _expr_signature(expr.get("baseExpression") or expr.get("base"))
+        index = _expr_signature(expr.get("indexExpression") or expr.get("index"))
+        return f"idx:{base}[{index}]"
+    if nt == "MemberAccess":
+        inner = _expr_signature(expr.get("expression"))
+        return f"mem:{inner}.{expr.get('memberName','')}"
+    if nt == "BinaryOperation":
+        op = expr.get("operator", "")
+        left = _expr_signature(expr.get("leftExpression"))
+        right = _expr_signature(expr.get("rightExpression"))
+        return f"bin:{op}({left},{right})"
+    return nt or ""

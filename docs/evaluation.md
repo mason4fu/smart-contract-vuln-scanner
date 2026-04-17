@@ -116,7 +116,7 @@ uv run python scripts/evaluate_arithmetic.py --output reports/arithmetic-eval.js
 
 | Dataset | Compiled | TP | FP | FN | Precision | Recall | F1 |
 |---------|----------|----|----|----|-----------|--------|----|
-| SmartBugs arithmetic subset | 15/15 | 19 | 5 | 4 | 0.792 | 0.826 | 0.809 |
+| SmartBugs arithmetic subset | 15/15 | 21 | 1 | 2 | 0.955 | 0.913 | 0.933 |
 
 ### Notes
 
