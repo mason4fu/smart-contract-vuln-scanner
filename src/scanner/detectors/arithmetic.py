@@ -310,7 +310,7 @@ def _has_explicit_bound_guard(ancestors: list[dict[str, Any]]) -> bool:
                 continue
             for b in _find_nodes(cond, "BinaryOperation"):
                 op = b.get("operator")
-                if isinstance(op, str) and op in {"<=", ">=", "<", ">", "=="}:
+                if isinstance(op, str) and op in _RISKY_BINARY_OPS:
                     return True
         return False
     return False
