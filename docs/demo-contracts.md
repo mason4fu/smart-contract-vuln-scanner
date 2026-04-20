@@ -25,12 +25,10 @@ These runs use the Solidity AST pipeline only (no `--bytecode-only`). Pre-0.8 ar
 
 ## Access-Control Demos (No tx.origin)
 
-| Contract | Concept | Vulnerable or Safe | Source-demo friendly | Bytecode-demo friendly | Exact scanner command | Expected findings summary | Caveats |
-|---|---|---|---|---|---|---|---|
-| `contracts/src/demo/DemoAccessControlMissingGuard.sol` | Public owner reassignment with no auth guard | Vulnerable | Yes | No | `uv run scanner scan contracts/src/demo/DemoAccessControlMissingGuard.sol --detector access-control --format text --output reports/demo` | 1 finding: `Unguarded admin-surface mutation` (SWC-105, HIGH) on `setOwner` | Bytecode-only mode does not report this pattern without `tx.origin` signal. |
-| `contracts/src/demo/DemoAccessControlAdminChange.sol` | Public admin reassignment with guarded contrast | Vulnerable | Yes | No | `uv run scanner scan contracts/src/demo/DemoAccessControlAdminChange.sol --detector access-control --format text --output reports/demo` | 1 finding: `Unguarded admin-surface mutation` (SWC-105, HIGH) on `setAdmin` | `setAdminSafely` is intentionally present as a side-by-side safe reference. |
-| `contracts/src/demo/DemoAccessControlRoleGrant.sol` | Unguarded role/admin mapping write | Vulnerable | Yes | No | `uv run scanner scan contracts/src/demo/DemoAccessControlRoleGrant.sol --detector access-control --format text --output reports/demo` | 1 finding: `Unguarded role grant` (SWC-105, HIGH) on `grantRole` | `grantRoleSafely` is intentionally present for immediate contrast. |
-| `contracts/src/demo/DemoAccessControlSafe.sol` | Owner-guarded admin surface with modifier and inline state updates | Safe | Yes | No | `uv run scanner scan contracts/src/demo/DemoAccessControlSafe.sol --detector access-control --format text --output reports/demo` | `No findings.` | Safe negative control for this detector section. |
+| Contract | Concept | Vulnerable or Safe | Exact scanner command | Expected findings summary | Caveats |
+|---|---|---|---|---|---|
+| `contracts/src/demo/DemoAccessControlVulnerable.sol` | One file with unguarded withdraw, ownership change, admin grant, and treasury config | Vulnerable | `uv run scanner scan contracts/src/demo/DemoAccessControlVulnerable.sol --detector access-control --format text --output reports/demo` | Multiple SWC-105 findings (severities vary with rule); compare to `DemoAccessControlSafe.sol` | Detector threat model may omit some config writes (for example treasury) until that surface is classified; bytecode-only mode is weak for `msg.sender` quality. |
+| `contracts/src/demo/DemoAccessControlSafe.sol` | Same surfaces with `onlyOwner` and related guards | Safe | `uv run scanner scan contracts/src/demo/DemoAccessControlSafe.sol --detector access-control --format text --output reports/demo` | `No findings.` | Negative control for the access-control segment. |
 
 ### Access-control bytecode note
 
@@ -39,7 +37,7 @@ For this demo scope (excluding `tx.origin`), bytecode-only access-control output
 Reference check command:
 
 ```powershell
-uv run scanner scan contracts/src/demo/DemoAccessControlMissingGuard.sol --detector access-control --bytecode-only --format text --output reports/demo
+uv run scanner scan contracts/src/demo/DemoAccessControlVulnerable.sol --detector access-control --bytecode-only --format text --output reports/demo
 ```
 
 Expected output: `No findings.`
@@ -48,13 +46,10 @@ This is expected and does not indicate a source-detector issue.
 
 ## Unchecked External Call Demos
 
-| Contract | Concept | Vulnerable or Safe | Source-demo friendly | Bytecode-demo friendly | Exact scanner command | Expected findings summary | Caveats |
-|---|---|---|---|---|---|---|---|
-| `contracts/src/demo/DemoUncheckedCallIgnored.sol` | Standalone low-level `.call` result ignored | Vulnerable | Yes | No (current heuristic outcome) | `uv run scanner scan contracts/src/demo/DemoUncheckedCallIgnored.sol --detector unchecked-external-calls --format text --output reports/demo` | 1 finding: `Unchecked external call result` (SWC-104, MEDIUM) on `ping` | Bytecode-only scan currently returns no findings for this tiny contract. |
-| `contracts/src/demo/DemoUncheckedCallAssignedUnused.sol` | Success assigned but not used as failure gate | Vulnerable | Yes | No (current heuristic outcome) | `uv run scanner scan contracts/src/demo/DemoUncheckedCallAssignedUnused.sol --detector unchecked-external-calls --format text --output reports/demo` | 1 finding: `Unchecked external call result` (SWC-104, MEDIUM) on `notify` | Uses minimal syntax close to real mistakes; no detector-specific hacks. |
-| `contracts/src/demo/DemoUncheckedCallSafeRequire.sol` | Safe gating with `require(success)` | Safe | Yes | N/A | `uv run scanner scan contracts/src/demo/DemoUncheckedCallSafeRequire.sol --detector unchecked-external-calls --format text --output reports/demo` | `No findings.` | Safe negative control. |
-| `contracts/src/demo/DemoUncheckedCallSafeRevert.sol` | Safe gating with `if (!success) revert` | Safe | Yes | N/A | `uv run scanner scan contracts/src/demo/DemoUncheckedCallSafeRevert.sol --detector unchecked-external-calls --format text --output reports/demo` | `No findings.` | Safe negative control. |
-| `contracts/src/demo/DemoUncheckedCallMixed.sol` | Unsafe event-only observation plus safe revert branch | Mixed (vulnerable + safe) | Yes | No (current heuristic outcome) | `uv run scanner scan contracts/src/demo/DemoUncheckedCallMixed.sol --detector unchecked-external-calls --format text --output reports/demo` | 1 finding: `Probably unchecked external call result` (SWC-104, MEDIUM) on `notifyUnchecked`; no finding expected on `notifyChecked` | Good for teaching why logging success is not the same as gating on success. |
+| Contract | Concept | Vulnerable or Safe | Exact scanner command | Expected findings summary | Caveats |
+|---|---|---|---|---|---|
+| `contracts/src/demo/DemoUncheckedCallVulnerable.sol` | Ignored `.call` result and assigned-but-ungated success in one contract | Vulnerable | `uv run scanner scan contracts/src/demo/DemoUncheckedCallVulnerable.sol --detector unchecked-external-calls --format text --output reports/demo` | Two SWC-104 (MEDIUM) findings: `notifyIgnored`, `notifyAssignedUnused` | Bytecode-only heuristics on tiny contracts may differ; use `tests/fixtures/UncheckedExternalCalls.sol` for bytecode-heavy demos. |
+| `contracts/src/demo/DemoUncheckedCallSafe.sol` | `require(success)` and `if (!success) revert` patterns | Safe | `uv run scanner scan contracts/src/demo/DemoUncheckedCallSafe.sol --detector unchecked-external-calls --format text --output reports/demo` | `No findings.` | Negative control for unchecked-call patterns. |
 
 ### Bytecode-friendly unchecked-call fallback
 
@@ -85,15 +80,10 @@ uv run scanner scan contracts/src/demo/DemoArithmeticUnchecked08.sol --detector 
 **Part 2 — access control & unchecked external calls:**
 
 ```powershell
-uv run scanner scan contracts/src/demo/DemoAccessControlMissingGuard.sol --detector access-control --format text --output reports/demo
-uv run scanner scan contracts/src/demo/DemoAccessControlAdminChange.sol --detector access-control --format text --output reports/demo
-uv run scanner scan contracts/src/demo/DemoAccessControlRoleGrant.sol --detector access-control --format text --output reports/demo
+uv run scanner scan contracts/src/demo/DemoAccessControlVulnerable.sol --detector access-control --format text --output reports/demo
 uv run scanner scan contracts/src/demo/DemoAccessControlSafe.sol --detector access-control --format text --output reports/demo
-uv run scanner scan contracts/src/demo/DemoUncheckedCallIgnored.sol --detector unchecked-external-calls --format text --output reports/demo
-uv run scanner scan contracts/src/demo/DemoUncheckedCallAssignedUnused.sol --detector unchecked-external-calls --format text --output reports/demo
-uv run scanner scan contracts/src/demo/DemoUncheckedCallSafeRequire.sol --detector unchecked-external-calls --format text --output reports/demo
-uv run scanner scan contracts/src/demo/DemoUncheckedCallSafeRevert.sol --detector unchecked-external-calls --format text --output reports/demo
-uv run scanner scan contracts/src/demo/DemoUncheckedCallMixed.sol --detector unchecked-external-calls --format text --output reports/demo
+uv run scanner scan contracts/src/demo/DemoUncheckedCallVulnerable.sol --detector unchecked-external-calls --format text --output reports/demo
+uv run scanner scan contracts/src/demo/DemoUncheckedCallSafe.sol --detector unchecked-external-calls --format text --output reports/demo
 ```
 
 These commands require no external dataset and are presentation-ready.
