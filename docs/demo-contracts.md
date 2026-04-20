@@ -48,7 +48,7 @@ This is expected and does not indicate a source-detector issue.
 
 | Contract | Concept | Vulnerable or Safe | Exact scanner command | Expected findings summary | Caveats |
 |---|---|---|---|---|---|
-| `contracts/src/demo/DemoUncheckedCallVulnerable.sol` | Ignored `.call` result and assigned-but-ungated success in one contract | Vulnerable | `uv run scanner scan contracts/src/demo/DemoUncheckedCallVulnerable.sol --detector unchecked-external-calls --format text --output reports/demo` | Two SWC-104 (MEDIUM) findings: `notifyIgnored`, `notifyAssignedUnused` | Bytecode-only heuristics on tiny contracts may differ; use `tests/fixtures/UncheckedExternalCalls.sol` for bytecode-heavy demos. |
+| `contracts/src/demo/DemoUncheckedCallVulnerable.sol` | Ignored `.call` result and assigned-but-ungated success in one contract | Vulnerable | `uv run scanner scan contracts/src/demo/DemoUncheckedCallVulnerable.sol --detector unchecked-external-calls --format text --output reports/demo` | Multiple SWC-104 (MEDIUM) findings on `notifyIgnored` and `notifyAssignedUnused` (titles may be `Unchecked` or `Probably unchecked` depending on evidence) | Bytecode-only heuristics on tiny contracts may differ; use `tests/fixtures/UncheckedExternalCalls.sol` for bytecode-heavy demos. |
 | `contracts/src/demo/DemoUncheckedCallSafe.sol` | `require(success)` and `if (!success) revert` patterns | Safe | `uv run scanner scan contracts/src/demo/DemoUncheckedCallSafe.sol --detector unchecked-external-calls --format text --output reports/demo` | `No findings.` | Negative control for unchecked-call patterns. |
 
 ### Bytecode-friendly unchecked-call fallback
