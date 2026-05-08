@@ -283,6 +283,22 @@ def test_generic_indexed_write_not_flagged_as_access_control(compiled_generic_in
     )
 
 
+def test_config_surface_flags_unguarded_treasury_update(compiled_config_surface):
+    contracts = analyze_source(compiled_config_surface)
+    detector = AccessControlDetector()
+    findings = detector.detect_from_source(contracts)
+
+    set_treasury = [f for f in findings if f.function == "setTreasury"]
+    set_counter = [f for f in findings if f.function == "setCounter"]
+    set_treasury_safe = [f for f in findings if f.function == "setTreasurySafe"]
+
+    assert set_treasury, "setTreasury should be treated as a privileged config write"
+    assert any("missing authorization" in f.title.lower() for f in set_treasury)
+    assert set_treasury[0].severity == Severity.HIGH
+    assert not set_counter, "Generic counter setters should not be promoted to access-control"
+    assert not set_treasury_safe, "Owner-gated treasury updates should not be flagged"
+
+
 def test_nested_helper_auth_is_detected(compiled_nested_auth_check):
     contracts = analyze_source(compiled_nested_auth_check)
     detector = AccessControlDetector()

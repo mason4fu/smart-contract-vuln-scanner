@@ -98,6 +98,11 @@ def compiled_generic_indexed_write():
 
 
 @pytest.fixture(scope="session")
+def compiled_config_surface():
+    return compile_sol_fixture("ConfigSurface.sol")
+
+
+@pytest.fixture(scope="session")
 def compiled_nested_auth_check():
     return compile_sol_fixture("NestedAuthCheck.sol")
 

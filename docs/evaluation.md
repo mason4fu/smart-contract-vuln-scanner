@@ -1,6 +1,11 @@
 # Evaluation
 
 ## Overview
+Report-ready outputs are saved under `reports/final-report/`, and
+`reports/final-report/summary.md` consolidates detector-by-detector benchmark
+numbers for the final report. Use those saved artifacts instead of quoting only
+aggregate prose.
+
 The access control scanner is evaluated against three independent datasets:
 
 - SmartBugs Curated access-control subset (line-level matching)
@@ -17,6 +22,10 @@ subsets with line-level matching:
 The arithmetic scanner is evaluated against the SmartBugs Curated arithmetic
 subset with line-level matching.
 
+The current reentrancy evaluator is exploratory and is mainly useful for
+tracking legacy-SmartBugs recall rather than claiming a benchmark-strong
+result.
+
 ## Datasets
 
 ### SmartBugs Curated
@@ -28,9 +37,9 @@ subset with line-level matching.
 **Results** (as of current scanner version):
 | Metric | Value |
 |--------|-------|
-| Compiled successfully | 13/18 |
-| Total findings | 21 |
-| True Positives | 14 |
+| Compiled successfully | 15/18 |
+| Total findings | 24 |
+| True Positives | 16 |
 | False Positives | 0 |
 | False Negatives | 0 |
 | Precision | 100% |

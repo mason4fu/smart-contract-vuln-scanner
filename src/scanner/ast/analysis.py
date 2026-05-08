@@ -81,6 +81,12 @@ _ROLE_VAR_PATTERNS = re.compile(
     re.IGNORECASE,
 )
 
+_CONFIG_VAR_PATTERNS = re.compile(
+    r"(treasury|beneficiar|recipient|collector|vault|reserve|router|oracle|"
+    r"implementation|logic|beacon|wallet|receiver|destination|fee)",
+    re.IGNORECASE,
+)
+
 
 def analyze_source(compiler_output: dict[str, Any]) -> list[ContractInfo]:
     """Analyze compiler output and return ContractInfo for all contracts.
@@ -319,7 +325,7 @@ def _extract_function(
                 auth_checks.append(ac)
                 if ac.uses_tx_origin:
                     uses_tx_origin = True
-            sa = _detect_sensitive_action(stmt, state_variables)
+            sa = _detect_sensitive_action(stmt, state_variables, function_name=name)
             if sa:
                 sa.source_location = _source_loc(stmt, source_file, line_map=line_map)
                 sensitive_actions.append(sa)
@@ -699,7 +705,10 @@ def _node_references_sender_scoped_state(node: dict[str, Any], state_variables: 
 
 
 def _detect_sensitive_action(
-    node: dict[str, Any], state_variables: list[str]
+    node: dict[str, Any],
+    state_variables: list[str],
+    *,
+    function_name: str = "",
 ) -> SensitiveAction | None:
     """Classify a statement as a sensitive action if applicable."""
     node_type = node.get("nodeType", "")
@@ -735,6 +744,16 @@ def _detect_sensitive_action(
             lhs_name = lhs.get("name", "")
             if lhs_name and _is_owner_variable(lhs_name) and lhs_name in state_variables:
                 return SensitiveAction(kind="owner_change", description=f"assigns to '{lhs_name}'")
+            if (
+                lhs_name
+                and lhs_name in state_variables
+                and _CONFIG_VAR_PATTERNS.search(lhs_name)
+                and not _is_owner_variable(lhs_name)
+            ):
+                config_desc = f"assigns to config variable '{lhs_name}'"
+                if function_name:
+                    config_desc += f" via '{function_name}'"
+                return SensitiveAction(kind="config_set", description=config_desc)
             # role mapping write: roles[addr] = ...
             if lhs.get("nodeType") == "IndexAccess":
                 base = lhs.get("baseExpression", {})
