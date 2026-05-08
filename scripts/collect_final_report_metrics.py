@@ -35,6 +35,7 @@ def main() -> int:
             "arithmetic_smartbugs": "reports/final-report/arithmetic-smartbugs.json",
             "unchecked_calls": "reports/final-report/unchecked-calls.json",
             "reentrancy_smartbugs": "reports/final-report/reentrancy-smartbugs.csv",
+            "baselines": "reports/final-report/baselines.json",
         },
         "detectors": {
             "access_control": _access_control_summary(),
@@ -42,6 +43,7 @@ def main() -> int:
             "arithmetic": _arithmetic_summary(),
             "reentrancy": _reentrancy_summary(),
         },
+        "baselines": _baseline_summary(),
         "notes": {
             "stored_but_not_used": (
                 "Unchecked-call classification distinguishes a stored success bool that never "
@@ -243,6 +245,19 @@ def _reentrancy_summary() -> dict[str, Any]:
     }
 
 
+def _baseline_summary() -> dict[str, Any]:
+    path = ROOT / "reports" / "final-report" / "baselines.json"
+    if not path.exists():
+        return {"available": False, "note": "Baseline artifact has not been generated yet."}
+    data = _load_json("reports/final-report/baselines.json")
+    return {
+        "available": True,
+        "slither_version": data.get("slither_version", ""),
+        "slither": data.get("slither", {}),
+        "heuristics": data.get("heuristics", {}),
+    }
+
+
 def _fmt_metric(value: Any) -> str:
     if value is None:
         return "n/a"
@@ -284,6 +299,7 @@ def _render_markdown(summary: dict[str, Any]) -> str:
     access_rows = summary["detectors"]["access_control"]["benchmarks"]
     unchecked_rows = summary["detectors"]["unchecked_external_calls"]["benchmarks"]
     arithmetic_rows = summary["detectors"]["arithmetic"]["benchmarks"]
+    baselines = summary.get("baselines", {})
 
     lines = [
         "# Final Report Benchmark Summary",
@@ -315,6 +331,66 @@ def _render_markdown(summary: dict[str, Any]) -> str:
         "legacy-version failure."
     )
     lines.append("")
+    if baselines.get("available"):
+        lines.append("## Baseline Comparison")
+        lines.append("")
+        lines.append(f"- External baseline tool: `Slither {baselines['slither_version']}`")
+        lines.append(
+            "- Scope note: access control is only a partial apples-to-apples comparison because "
+            "Slither exposes several narrower auth-related detectors rather than one broad "
+            "SWC-105-equivalent rule."
+        )
+        lines.append("")
+        lines.append("### Access Control (SmartBugs)")
+        lines.append("")
+        lines.extend(
+            _comparison_table(
+                [
+                    {
+                        "tool": "Our scanner",
+                        "compiled": access_rows[0]["compiled"],
+                        "granularity": access_rows[0]["granularity"],
+                        "tp": access_rows[0]["tp"],
+                        "fp": access_rows[0]["fp"],
+                        "fn": access_rows[0]["fn"],
+                        "precision": access_rows[0]["precision"],
+                        "recall": access_rows[0]["recall"],
+                        "f1": access_rows[0]["f1"],
+                        "note": "AST + bytecode scanner; broader privileged-surface modeling.",
+                    },
+                    {
+                        "tool": "Slither",
+                        "compiled": baselines["slither"]["access_control"]["compiled"],
+                        "granularity": baselines["slither"]["access_control"]["protocol"][
+                            "granularity"
+                        ]
+                        + " (+/-5 lines)",
+                        **baselines["slither"]["access_control"]["aggregate"],
+                        "note": baselines["slither"]["access_control"]["scope_note"],
+                    },
+                ]
+            )
+        )
+        lines.append("")
+        lines.append("### Unchecked External Calls")
+        lines.append("")
+        lines.extend(
+            _comparison_table(
+                _unchecked_comparison_rows(summary, baselines),
+            )
+        )
+        lines.append("")
+        lines.append("### Reentrancy (SmartBugs)")
+        lines.append("")
+        lines.extend(_reentrancy_comparison_table(summary, baselines))
+        lines.append("")
+        lines.append(
+            "- Supplemental note on the naive SWC-104 syntax baseline: it scores well on these "
+            "mostly positive-only public subsets because it flags nearly every low-level call, "
+            "but it does not encode the `stored but not used` semantics that distinguish checked "
+            "from unchecked failures."
+        )
+        lines.append("")
     lines.append("## Feedback-Specific Notes")
     lines.append("")
     lines.append(
@@ -342,6 +418,101 @@ def _render_markdown(summary: dict[str, Any]) -> str:
         lines.append(f"- `{key}`: `{path}`")
     lines.append("")
     return "\n".join(lines)
+
+
+def _comparison_table(rows: list[dict[str, Any]]) -> list[str]:
+    lines = [
+        "| Tool | Compiled | Granularity | TP | FP | FN | Precision | Recall | F1 | Notes |",
+        "|---|---|---|---:|---:|---:|---:|---:|---:|---|",
+    ]
+    for row in rows:
+        lines.append(
+            "| "
+            + " | ".join(
+                [
+                    row["tool"],
+                    row["compiled"],
+                    row["granularity"],
+                    _fmt_metric(row.get("tp")),
+                    _fmt_metric(row.get("fp")),
+                    _fmt_metric(row.get("fn")),
+                    _fmt_metric(row.get("precision")),
+                    _fmt_metric(row.get("recall")),
+                    _fmt_metric(row.get("f1")),
+                    row.get("note", ""),
+                ]
+            )
+            + " |"
+        )
+    return lines
+
+
+def _unchecked_comparison_rows(
+    summary: dict[str, Any], baselines: dict[str, Any]
+) -> list[dict[str, Any]]:
+    ours = {
+        row["benchmark"]: row
+        for row in summary["detectors"]["unchecked_external_calls"]["benchmarks"]
+        if row["benchmark"] != "SWC Registry"
+    }
+    slither_data = baselines["slither"]["unchecked_external_calls"]
+    dataset_labels = {
+        "smartbugs": "SmartBugs Curated",
+        "not-so-smart-contracts": "Not-So-Smart-Contracts",
+        "solidifi": "SolidiFI (supplemental)",
+    }
+    rows = []
+    for dataset_key, label in dataset_labels.items():
+        slither_metrics = slither_data["scoped_metrics_by_dataset"][dataset_key]
+        slither_results = [
+            row for row in slither_data["results"] if row["dataset"] == dataset_key
+        ]
+        if dataset_key == "solidifi":
+            slither_results = [
+                row for row in slither_results if row.get("bug_type") != "Unchecked-Send"
+            ]
+        slither_compiled = sum(1 for row in slither_results if not row.get("compile_error"))
+        rows.append(
+            {
+                "tool": f"Our scanner ({label})",
+                "compiled": ours[label]["compiled"],
+                "granularity": ours[label]["granularity"],
+                "tp": ours[label]["tp"],
+                "fp": ours[label]["fp"],
+                "fn": ours[label]["fn"],
+                "precision": ours[label]["precision"],
+                "recall": ours[label]["recall"],
+                "f1": ours[label]["f1"],
+                "note": "AST + bytecode detector.",
+            }
+        )
+        rows.append(
+            {
+                "tool": f"Slither ({label})",
+                "compiled": f"{slither_compiled}/{len(slither_results)}",
+                "granularity": "line-level (+/-6 lines)",
+                **slither_metrics,
+                "note": "Baseline from unchecked-lowlevel + unchecked-send.",
+            }
+        )
+    return rows
+
+
+def _reentrancy_comparison_table(
+    summary: dict[str, Any], baselines: dict[str, Any]
+) -> list[str]:
+    ours = summary["detectors"]["reentrancy"]["benchmarks"][0]
+    slither = baselines["slither"]["reentrancy"]["summary"]
+    return [
+        "| Tool | Compiled | Contract Recall | Line Recall | Notes |",
+        "|---|---|---:|---:|---|",
+        "| Our scanner | "
+        f"{ours['compiled']} | {ours['detected_recall']:.3f} | {ours['line_recall']:.3f} | "
+        "31/31 contracts compiled; one line-overlap miss. |",
+        "| Slither | "
+        f"{slither['compiled']} | {slither['detected_recall']:.3f} | {slither['line_recall']:.3f} | "
+        "Perfect recall on the compiled subset, but 2/31 contracts failed to compile in this environment. |",
+    ]
 
 
 if __name__ == "__main__":

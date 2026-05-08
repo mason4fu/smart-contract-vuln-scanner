@@ -7,6 +7,7 @@ This document is the repo-side checklist for turning the scanner into the final 
 - The access-control detector now treats treasury-style configuration writes as privileged surfaces, so `setTreasury(...)` is no longer just a caveat in the presentation demo; it is an actual regression-tested detection path.
 - The unchecked external call write-up now needs to emphasize the difference between a return value that is merely stored and a return value that actually gates failure.
 - Benchmark outputs are now saved under `reports/final-report/` and summarized in `reports/final-report/summary.{json,md}` so the final report can cite detector-by-detector, benchmark-by-benchmark numbers instead of relying on aggregate prose.
+- External baseline outputs are now saved in `reports/final-report/baselines.json`, and the consolidated summary folds those comparisons into the report-ready markdown.
 
 ## Report-Ready Artifacts
 
@@ -16,7 +17,25 @@ This document is the repo-side checklist for turning the scanner into the final 
 - Unchecked external calls: `reports/final-report/unchecked-calls.json`
 - Arithmetic / SmartBugs: `reports/final-report/arithmetic-smartbugs.json`
 - Reentrancy / SmartBugs CSV: `reports/final-report/reentrancy-smartbugs.csv`
+- External + heuristic baselines: `reports/final-report/baselines.json`
 - Consolidated benchmark summary: `reports/final-report/summary.md`
+
+## Baseline Story
+
+The repo now has a real baseline comparison rather than only internal metrics:
+
+- `Slither 0.11.5` is the main external tool baseline.
+- It is compared on the overlapping slices where the comparison is technically fair:
+  - SmartBugs reentrancy
+  - SmartBugs access control (with an explicit partial-scope caveat)
+  - SmartBugs, NSSC, and scoped SolidiFI unchecked external calls
+- A naive SWC-104 syntax baseline is also generated, but it should be framed as a cautionary contrast rather than a serious semantic competitor because these public subsets are mostly positive examples.
+
+Suggested wording:
+
+- Slither is a credible industry-standard static-analysis baseline for overlapping detector classes.
+- Our scanner outperforms the Slither baseline on the access-control slice and on the harder scoped SolidiFI unchecked-call subset.
+- Reentrancy should be framed more carefully: Slither is extremely strong where it compiles, while our detector compiles across the full cached SmartBugs subset in this environment and still achieves near-perfect line overlap.
 
 ## Stored But Not Used
 
@@ -97,6 +116,7 @@ You are ready to write the final report when:
 
 - every number cited in the paper comes from a saved artifact under `reports/final-report/`
 - the report cites benchmarks separately by detector and dataset
+- the report includes the generated baseline comparison from `reports/final-report/summary.md`
 - the SWC-104 section includes the stored-vs-gated distinction
 - the access-control section includes the `setTreasury` threat-model expansion story
 - reentrancy is framed honestly as strong but still heuristic on SmartBugs
