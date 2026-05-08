@@ -15,7 +15,7 @@ This document is the repo-side checklist for turning the scanner into the final 
 - Access control / SWC Registry: `reports/final-report/access-control-swc-registry.json`
 - Unchecked external calls: `reports/final-report/unchecked-calls.json`
 - Arithmetic / SmartBugs: `reports/final-report/arithmetic-smartbugs.json`
-- Reentrancy / SmartBugs exploratory CSV: `reports/final-report/reentrancy-smartbugs.csv`
+- Reentrancy / SmartBugs CSV: `reports/final-report/reentrancy-smartbugs.csv`
 - Consolidated benchmark summary: `reports/final-report/summary.md`
 
 ## Stored But Not Used
@@ -79,13 +79,17 @@ This is a good final-report example because it explains both a limitation and an
 
 ## How To Frame Reentrancy Honestly
 
-The reentrancy detector is useful in demos and unit tests, but the current SmartBugs exploratory run is weak on legacy 0.4.x contracts.
+The reentrancy detector is now much stronger on the SmartBugs subset than the
+earlier prototype version. The current saved artifact reports:
+
+- `31/31` contracts detected with at least one finding
+- `30/31` line overlap at `+/-3` lines
 
 Suggested final-report wording:
 
-- The detector demonstrates the checks-effects-interactions ordering signal on curated examples.
-- The current implementation is not yet benchmark-strong on the legacy SmartBugs reentrancy bucket.
-- Therefore, reentrancy should be presented as a scoped prototype detector rather than one of the strongest evaluation results.
+- The detector now covers legacy low-level call chains, storage-alias state writes, helper-triggered external interaction, and modifier-carried external interaction.
+- SmartBugs results are strong enough to present as a real benchmark result, not just a demo-only detector.
+- One residual mismatch remains in `spank_chain_payment.sol`, so the report should still present reentrancy as heuristic static analysis rather than a proof-oriented analysis.
 
 ## Definition Of Done
 
@@ -95,4 +99,4 @@ You are ready to write the final report when:
 - the report cites benchmarks separately by detector and dataset
 - the SWC-104 section includes the stored-vs-gated distinction
 - the access-control section includes the `setTreasury` threat-model expansion story
-- reentrancy is framed honestly as exploratory on legacy SmartBugs
+- reentrancy is framed honestly as strong but still heuristic on SmartBugs

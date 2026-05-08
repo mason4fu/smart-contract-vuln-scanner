@@ -182,6 +182,10 @@ Implementation: `src/scanner/detectors/arithmetic.py` · Tests: `tests/test_arit
   - Compiled 15/15
   - TP=21, FP=1, FN=2
   - precision 0.955, recall 0.913, F1=0.933
+- **Reentrancy (SmartBugs curated reentrancy subset, structural heuristic)**:
+  - Compiled 31/31
+  - Contract recall 31/31 = 1.000
+  - Line overlap at ±3 lines: 30/31 = 0.968
 
 Saved benchmark artifacts for the final report live under `reports/final-report/`.
 See `reports/final-report/summary.md` and [`docs/final-report-prep.md`](docs/final-report-prep.md).

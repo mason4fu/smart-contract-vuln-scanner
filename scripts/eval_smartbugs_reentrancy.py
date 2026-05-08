@@ -14,10 +14,9 @@ Or::
 
 Requires network the first time each solc version is downloaded.
 
-Note: Many curated contracts use Solidity 0.4.x low-level calls
-(``.call.value(...)()``), which the current AST detector does not model the
-same way as 0.8.x ``call{value: ...}("")``. Expect low recall until those
-patterns are added; this script is still useful for regression tracking.
+Line-overlap reporting uses a configurable source-line tolerance because the
+detector is structural and may anchor its finding at the external call site
+rather than the exact benchmark annotation line.
 """
 
 from __future__ import annotations
@@ -155,19 +154,22 @@ def _compile_standard_file(
         msgs = "; ".join(str(e.get("formattedMessage", e)) for e in hard[:3])
         return None, msgs
 
+    for fname, src_info in standard_input.get("sources", {}).items():
+        if fname in output.get("sources", {}) and "content" in src_info:
+            output["sources"][fname]["content"] = src_info["content"]
+
     return output, ""
 
 
-def _finding_line_hit(findings: list[Any], expected: list[int]) -> bool:
+def _finding_line_hit(findings: list[Any], expected: list[int], *, tolerance: int) -> bool:
     if not expected:
         return False
-    exp = set(expected)
     for f in findings:
         loc = getattr(f, "location", None)
         if loc is None:
             continue
         ls = getattr(loc, "line_start", 0)
-        if ls in exp:
+        if any(abs(ls - exp) <= tolerance for exp in expected):
             return True
     return False
 
@@ -176,6 +178,7 @@ def run_evaluation(
     *,
     smartbugs_root: Path,
     write_csv: Path | None,
+    tolerance: int,
 ) -> Summary:
     vuln_json = smartbugs_root / "vulnerabilities.json"
     if not vuln_json.is_file():
@@ -233,7 +236,7 @@ def run_evaluation(
         findings = detect_reentrancy(out)
         n = len(findings)
         detected = n > 0
-        line_hit = _finding_line_hit(findings, expected_lines)
+        line_hit = _finding_line_hit(findings, expected_lines, tolerance=tolerance)
 
         if detected:
             summary.detected += 1
@@ -294,7 +297,7 @@ def run_evaluation(
     return summary
 
 
-def _print_report(s: Summary) -> None:
+def _print_report(s: Summary, *, tolerance: int) -> None:
     print("SmartBugs Curated — reentrancy subset")
     print(f"  Entries (labeled reentrancy): {s.total}")
     print(f"  Compiled OK:                 {s.compiled}")
@@ -303,7 +306,10 @@ def _print_report(s: Summary) -> None:
         recall = s.detected / s.compiled
         line_recall = s.line_hits / s.compiled
         print(f"  Recall (≥1 finding):         {s.detected}/{s.compiled} ({recall:.1%})")
-        print(f"  Line overlap (any expected): {s.line_hits}/{s.compiled} ({line_recall:.1%})")
+        print(
+            f"  Line overlap (+/-{tolerance}):     "
+            f"{s.line_hits}/{s.compiled} ({line_recall:.1%})"
+        )
     hits = [r.name for r in s.rows if r.detected]
     if hits:
         print(f"  With ≥1 finding:             {', '.join(hits)}")
@@ -334,15 +340,25 @@ def main() -> int:
         default=None,
         help="Write detailed results CSV to this path",
     )
+    parser.add_argument(
+        "--tolerance",
+        type=int,
+        default=3,
+        help="Line tolerance for matching a finding to an expected vulnerable line.",
+    )
     args = parser.parse_args()
 
     try:
-        summary = run_evaluation(smartbugs_root=args.smartbugs_root.resolve(), write_csv=args.csv)
+        summary = run_evaluation(
+            smartbugs_root=args.smartbugs_root.resolve(),
+            write_csv=args.csv,
+            tolerance=args.tolerance,
+        )
     except FileNotFoundError as exc:
         print(exc, file=sys.stderr)
         return 1
 
-    _print_report(summary)
+    _print_report(summary, tolerance=args.tolerance)
     return 0
 
 

@@ -22,9 +22,9 @@ subsets with line-level matching:
 The arithmetic scanner is evaluated against the SmartBugs Curated arithmetic
 subset with line-level matching.
 
-The current reentrancy evaluator is exploratory and is mainly useful for
-tracking legacy-SmartBugs recall rather than claiming a benchmark-strong
-result.
+The current reentrancy evaluator now provides strong SmartBugs coverage after
+legacy call-chain support, storage-alias state-write handling, helper-call
+propagation, and modifier-carried external interaction detection were added.
 
 ## Datasets
 
