@@ -19,6 +19,7 @@ This document is the repo-side checklist for turning the scanner into the final 
 - Reentrancy / SmartBugs CSV: `reports/final-report/reentrancy-smartbugs.csv`
 - External + heuristic baselines: `reports/final-report/baselines.json`
 - Consolidated benchmark summary: `reports/final-report/summary.md`
+- Paste-ready baseline section: `docs/final-report-baseline-section.md`
 
 ## Baseline Story
 
