@@ -121,33 +121,40 @@ def detect_arithmetic_bytecode(bytecode: ContractBytecode) -> list[Finding]:
     except (OSError, ValueError):
         return []
 
+    findings: list[Finding] = []
     for idx, insn in enumerate(instructions):
         mnemonic = _instruction_mnemonic(insn)
         if mnemonic not in _ARITHMETIC_MNEMONICS:
             continue
         window = instructions[idx + 1 : idx + 9]
-        if any(_instruction_mnemonic(next_insn) == "SSTORE" for next_insn in window):
-            return [
-                Finding(
-                    detector=_DETECTOR_NAME,
-                    title="Potential arithmetic overflow/underflow (bytecode heuristic)",
-                    description=(
-                        f"Contract '{bytecode.contract_name}' runtime bytecode contains "
-                        f"{mnemonic} followed by SSTORE in a short window. This can indicate "
-                        "unchecked arithmetic affecting storage in pre-0.8.0-style code. "
-                        "Bytecode-only evidence is heuristic and should be verified against source."
-                    ),
-                    severity=Severity.LOW,
-                    confidence="low",
-                    contract=bytecode.contract_name,
-                    swc_id="SWC-101",
-                    remediation=(
-                        "Review source arithmetic around storage updates and ensure bounds checks "
-                        "or checked arithmetic semantics."
-                    ),
-                )
-            ]
-    return []
+        sstore = next(
+            (next_insn for next_insn in window if _instruction_mnemonic(next_insn) == "SSTORE"),
+            None,
+        )
+        if sstore is None:
+            continue
+        findings.append(
+            Finding(
+                detector=_DETECTOR_NAME,
+                title="Potential arithmetic overflow/underflow (bytecode)",
+                description=(
+                    f"Contract '{bytecode.contract_name}' runtime bytecode contains "
+                    f"{mnemonic} at pc {int(insn.pc)} followed by SSTORE at pc {int(sstore.pc)} "
+                    "in a short window. This can indicate unchecked arithmetic affecting "
+                    "storage in pre-0.8.0-style code. Bytecode-only evidence is heuristic "
+                    "and should be verified against source."
+                ),
+                severity=Severity.LOW,
+                confidence="low",
+                contract=bytecode.contract_name,
+                swc_id="SWC-101",
+                remediation=(
+                    "Review source arithmetic around storage updates and ensure bounds checks "
+                    "or checked arithmetic semantics."
+                ),
+            )
+        )
+    return findings
 
 
 def _evaluate_node(

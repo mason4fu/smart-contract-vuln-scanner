@@ -191,6 +191,34 @@ def test_cli_scan_detector_reentrancy_safe_contract_no_findings():
     assert "No findings" in result.stdout
 
 
+def test_cli_scan_raw_bytecode_reentrancy(tmp_path):
+    bytecode_file = tmp_path / "reentrant.bin"
+    bytecode_file.write_text("f1600055", encoding="utf-8")
+
+    result = runner.invoke(
+        app,
+        [
+            "scan",
+            str(bytecode_file),
+            "--detector",
+            "reentrancy",
+            "--bytecode-only",
+            "--format",
+            "json",
+            "--output",
+            str(tmp_path),
+        ],
+    )
+
+    assert result.exit_code == 0
+    import json
+
+    data = json.loads((tmp_path / "reentrant.json").read_text(encoding="utf-8"))
+    assert len(data) == 1
+    assert data[0]["swc_id"] == "SWC-107"
+    assert "(bytecode)" in data[0]["title"].lower()
+
+
 def test_cli_scan_unknown_detector_exits_error():
     result = runner.invoke(
         app,

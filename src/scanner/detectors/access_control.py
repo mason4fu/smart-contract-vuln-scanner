@@ -120,15 +120,28 @@ class AccessControlDetector(BaseDetector):
                 continue
             analysis = analyze_bytecode(hex_code)
             if analysis.has_origin:
+                selector_count = len(analysis.function_selectors)
+                caller_check_count = len(analysis.caller_checks)
+                offset_preview = ", ".join(str(offset) for offset in analysis.origin_offsets[:3])
+                dispatcher_hint = ""
+                if selector_count:
+                    dispatcher_hint += f" Detected {selector_count} dispatcher selector(s)."
+                if caller_check_count:
+                    dispatcher_hint += (
+                        f" Detected {caller_check_count} CALLER-based guard pattern(s), "
+                        "so ORIGIN likely participates in a specific authorization path "
+                        "rather than being the only auth signal."
+                    )
                 findings.append(
                     Finding(
                         detector=_DETECTOR_NAME,
                         title="tx.origin used (bytecode)",
                         description=(
                             f"Contract '{bc.contract_name}' deployed bytecode contains the "
-                            "ORIGIN opcode. This likely indicates tx.origin is used for "
+                            f"ORIGIN opcode at pc(s) {offset_preview}. This likely indicates tx.origin is used for "
                             "authorization, which is vulnerable to phishing attacks (SWC-115). "
                             "Review source code for require(tx.origin == ...) patterns."
+                            f"{dispatcher_hint}"
                         ),
                         severity=Severity.MEDIUM,
                         confidence="low",

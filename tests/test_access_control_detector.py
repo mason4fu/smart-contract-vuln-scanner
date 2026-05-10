@@ -168,6 +168,7 @@ def test_tx_origin_vuln_bytecode_findings(compiled_tx_origin_vuln):
     assert len(findings) >= 1
     assert findings[0].severity == Severity.MEDIUM
     assert "ORIGIN" in findings[0].title or "tx.origin" in findings[0].title.lower()
+    assert "pc(s)" in findings[0].description
 
 
 def test_safe_contract_no_bytecode_findings(compiled_safe_contract):

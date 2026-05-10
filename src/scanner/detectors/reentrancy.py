@@ -184,6 +184,32 @@ def _deployed_bytecode_suggests_call_before_sstore(deployed_hex: str) -> bool:
     return False
 
 
+def _bytecode_call_before_sstore_sequences(
+    deployed_hex: str, *, window: int = 12
+) -> list[tuple[int, int, str]]:
+    """Return suspicious CALL-family -> SSTORE sequences as (call_pc, sstore_pc, mnemonic)."""
+    raw = deployed_hex.strip()
+    if raw.startswith("0x"):
+        raw = raw[2:]
+    if not raw:
+        return []
+    try:
+        instructions = disassemble(raw)
+    except (OSError, ValueError):
+        return []
+
+    sequences: list[tuple[int, int, str]] = []
+    for idx, instr in enumerate(instructions):
+        mnemonic = _instruction_mnemonic(instr)
+        if mnemonic not in _CALL_MNEMONICS:
+            continue
+        for next_instr in instructions[idx + 1 : idx + 1 + window]:
+            if _instruction_mnemonic(next_instr) == "SSTORE":
+                sequences.append((int(instr.pc), int(next_instr.pc), mnemonic))
+                break
+    return sequences
+
+
 def _bytecode_call_before_sstore_by_contract(compiler_output: dict[str, Any]) -> dict[str, bool]:
     out: dict[str, bool] = {}
     for cb in extract_bytecode(compiler_output):
@@ -609,7 +635,46 @@ class ReentrancyDetector(BaseDetector):
     def detect_from_bytecode(
         self, bytecodes: list[ContractBytecode], extra: dict[str, Any] | None = None
     ) -> list[Finding]:
-        return []
+        findings: list[Finding] = []
+        for bytecode in bytecodes:
+            findings.extend(detect_reentrancy_bytecode(bytecode))
+        return findings
 
     def detect_from_compiler_output(self, compiler_output: dict[str, Any]) -> list[Finding]:
         return detect_reentrancy(compiler_output)
+
+
+def detect_reentrancy_bytecode(bytecode: ContractBytecode) -> list[Finding]:
+    """Bytecode-only fallback for reentrancy-like CALL-before-SSTORE ordering."""
+    raw = (bytecode.deployed_bytecode or bytecode.creation_bytecode or "").strip()
+    if not raw:
+        return []
+    sequences = _bytecode_call_before_sstore_sequences(raw)
+    if not sequences:
+        return []
+
+    confidence = "medium" if len(sequences) >= 2 else "low"
+    seq_preview = ", ".join(
+        f"{mnemonic}@{call_pc}->SSTORE@{sstore_pc}"
+        for call_pc, sstore_pc, mnemonic in sequences[:3]
+    )
+    return [
+        Finding(
+            detector="reentrancy",
+            title="Potential reentrancy pattern (bytecode)",
+            description=(
+                f"Runtime bytecode for contract '{bytecode.contract_name}' contains "
+                f"CALL-family instruction(s) before later SSTORE writes: {seq_preview}. "
+                "This ordering is a bytecode-only heuristic for checks-effects-interactions "
+                "violations and should be verified against source code or source maps."
+            ),
+            severity=Severity.MEDIUM,
+            confidence=confidence,
+            contract=bytecode.contract_name,
+            swc_id="SWC-107",
+            remediation=(
+                "Review external-call ordering and move state effects before interactions "
+                "where possible."
+            ),
+        )
+    ]
