@@ -118,6 +118,11 @@ def compiled_modifier_helper_auth():
 
 
 @pytest.fixture(scope="session")
+def compiled_helper_sensitive_actions():
+    return compile_sol_fixture("HelperSensitiveActions.sol")
+
+
+@pytest.fixture(scope="session")
 def compiled_inherited_auth():
     return compile_sol_fixture("InheritedAuth.sol")
 

@@ -215,6 +215,8 @@ def _extract_contract(
         if child.get("kind") == "constructor" or bool(child.get("isConstructor", False)):
             constructor_node = child
 
+    _propagate_internal_function_sensitivity(functions)
+
     # Detect whether any owner-like state variable is initialized
     owner_initialized_in_constructor = False
     owner_vars = [v for v in state_variables if _is_owner_variable(v)]
@@ -242,6 +244,95 @@ def _extract_contract(
         owner_initialized_in_constructor=owner_initialized_in_constructor,
         source_location=loc,
     )
+
+
+def _propagate_internal_function_sensitivity(functions: list[FunctionInfo]) -> None:
+    """Lift helper-side sensitive actions onto their externally callable entrypoints.
+
+    Access-control risk often lives in an internal/private helper such as
+    `_setOwner(...)` or `_grantRole(...)`, while the public entrypoint only calls
+    that helper. We propagate helper actions through the internal call graph so
+    the externally callable function inherits the privileged surface it exposes.
+    """
+    helper_map = {
+        func.name: func for func in functions if func.visibility in ("internal", "private") and func.name
+    }
+    if not helper_map:
+        return
+
+    for func in functions:
+        propagated = _collect_sensitive_actions_from_helpers(func, helper_map, depth=4)
+        if not propagated:
+            continue
+        func.sensitive_actions = _merge_sensitive_actions(func.sensitive_actions, propagated)
+
+
+def _collect_sensitive_actions_from_helpers(
+    func: FunctionInfo,
+    helper_map: dict[str, FunctionInfo],
+    *,
+    depth: int,
+    visited: set[str] | None = None,
+) -> list[SensitiveAction]:
+    if depth <= 0:
+        return []
+    if visited is None:
+        visited = set()
+
+    propagated: list[SensitiveAction] = []
+    for callee in func.extra.get("called_functions", []) if func.extra else []:
+        helper = helper_map.get(callee)
+        if helper is None or callee in visited:
+            continue
+        next_visited = visited | {callee}
+        propagated.extend(
+            _tag_helper_actions(helper.sensitive_actions, helper_name=callee)
+        )
+        propagated.extend(
+            _collect_sensitive_actions_from_helpers(
+                helper,
+                helper_map,
+                depth=depth - 1,
+                visited=next_visited,
+            )
+        )
+    return _merge_sensitive_actions([], propagated)
+
+
+def _tag_helper_actions(
+    actions: list[SensitiveAction],
+    *,
+    helper_name: str,
+) -> list[SensitiveAction]:
+    tagged: list[SensitiveAction] = []
+    for action in actions:
+        desc = action.description or action.kind
+        if "via helper" not in desc:
+            desc = f"{desc} via helper '{helper_name}'"
+        tagged.append(
+            action.model_copy(
+                update={
+                    "description": desc,
+                }
+            )
+        )
+    return tagged
+
+
+def _merge_sensitive_actions(
+    base: list[SensitiveAction],
+    extra: list[SensitiveAction],
+) -> list[SensitiveAction]:
+    seen: set[tuple[str, str, int]] = set()
+    merged: list[SensitiveAction] = []
+    for action in [*base, *extra]:
+        loc_line = action.source_location.line_start if action.source_location else 0
+        key = (action.kind, action.description, loc_line)
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(action)
+    return merged
 
 
 def _extract_modifier(
