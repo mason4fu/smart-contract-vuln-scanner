@@ -55,6 +55,35 @@ Reported patterns include:
 
 Findings include source file, line, function, call kind, and evidence text.
 
+### Stored But Not Used
+
+The important distinction is not whether the call result is assigned to a
+variable. The important distinction is whether that variable actually gates
+failure before execution continues.
+
+Example that is still vulnerable:
+
+```solidity
+(bool success, ) = target.call(data);
+emit Attempted(success);
+balances[msg.sender] += 1;
+```
+
+Here the success value is stored, but it is not used as a failure gate. The
+function can continue after a failed low-level call.
+
+Example that is treated as handled:
+
+```solidity
+(bool success, ) = target.call(data);
+require(success, "call failed");
+balances[msg.sender] += 1;
+```
+
+This is why the detector's return-value scan is stronger than a pure
+pattern-match on `.call(...)`: it distinguishes "stored but not used" from
+"stored and used to stop execution on failure."
+
 ## Bytecode Analysis
 
 Bytecode analysis disassembles runtime bytecode with `pyevmasm` and scans for

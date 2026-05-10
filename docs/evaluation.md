@@ -1,6 +1,11 @@
 # Evaluation
 
 ## Overview
+Report-ready outputs are saved under `reports/final-report/`, and
+`reports/final-report/summary.md` consolidates detector-by-detector benchmark
+numbers for the final report. Use those saved artifacts instead of quoting only
+aggregate prose.
+
 The access control scanner is evaluated against three independent datasets:
 
 - SmartBugs Curated access-control subset (line-level matching)
@@ -17,6 +22,16 @@ subsets with line-level matching:
 The arithmetic scanner is evaluated against the SmartBugs Curated arithmetic
 subset with line-level matching.
 
+The current reentrancy evaluator now provides strong SmartBugs coverage after
+legacy call-chain support, storage-alias state-write handling, helper-call
+propagation, and modifier-carried external interaction detection were added.
+
+The repository now also includes generated baseline comparisons in
+`reports/final-report/baselines.json`:
+
+- `Slither 0.11.5` for overlapping access-control, unchecked-call, and reentrancy slices
+- a naive SWC-104 syntax baseline for contrast with the semantic unchecked-call detector
+
 ## Datasets
 
 ### SmartBugs Curated
@@ -28,9 +43,9 @@ subset with line-level matching.
 **Results** (as of current scanner version):
 | Metric | Value |
 |--------|-------|
-| Compiled successfully | 13/18 |
-| Total findings | 21 |
-| True Positives | 14 |
+| Compiled successfully | 15/18 |
+| Total findings | 24 |
+| True Positives | 16 |
 | False Positives | 0 |
 | False Negatives | 0 |
 | Precision | 100% |
@@ -101,7 +116,28 @@ uv run python scripts/evaluate_unchecked_calls.py --output reports/unchecked-cal
 
 # Evaluate arithmetic (SWC-101) subset
 uv run python scripts/evaluate_arithmetic.py --output reports/arithmetic-eval.json
+
+# Generate baseline comparisons and refresh the final-report summary
+uv run python scripts/evaluate_baselines.py --output reports/final-report/baselines.json
+uv run python scripts/collect_final_report_metrics.py
 ```
+
+## Baseline Comparisons
+
+The main comparison artifact is `reports/final-report/summary.md`. Current
+headline results are:
+
+| Slice | Our scanner | Baseline | Takeaway |
+|---------|----------|----------|----------|
+| Access control / SmartBugs | P/R/F1 = 1.000 / 1.000 / 1.000 | Slither = 0.700 / 0.368 / 0.483 | Our broader privileged-surface model substantially outperforms the narrower auth-related Slither rules on this slice. |
+| Unchecked external calls / SmartBugs | P/R/F1 = 1.000 / 1.000 / 1.000 | Slither = 1.000 / 1.000 / 1.000 | Both tools are perfect on the small hand-curated subset. |
+| Unchecked external calls / SolidiFI scoped subset | recall = 0.898 | Slither recall = 0.695 | Our source-level success-gating logic recovers more labeled failures on the harder injected subset. |
+| Reentrancy / SmartBugs | 31/31 compiled, line recall = 0.968 | Slither 29/31 compiled, line recall = 1.000 on compiled subset | Slither is very strong where it compiles; our detector is more portable across the full cached subset in this environment. |
+
+The naive SWC-104 syntax baseline is included as a cautionary comparison, not a
+claim of semantic equivalence. Because the public subsets are mostly positive
+examples, simply flagging nearly every low-level call can look artificially
+strong without proving that checked calls are handled correctly.
 
 ## Arithmetic (SWC-101)
 

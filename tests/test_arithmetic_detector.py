@@ -95,3 +95,14 @@ def test_bytecode_hint_reports_add_before_sstore():
     assert len(findings) == 1
     assert findings[0].swc_id == "SWC-101"
     assert findings[0].confidence == "low"
+
+
+def test_bytecode_hint_can_report_multiple_suspicious_windows():
+    bc = ContractBytecode(
+        contract_name="RawArithmeticMulti",
+        creation_bytecode="",
+        deployed_bytecode="60016002016000556003600402600055",
+    )
+    findings = detect_arithmetic_bytecode(bc)
+    assert len(findings) == 2
+    assert all("(bytecode)" in finding.title.lower() for finding in findings)

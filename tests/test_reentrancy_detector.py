@@ -7,7 +7,11 @@ import pytest
 from scanner.ast.analysis import analyze_source
 from scanner.bytecode.loader import extract_bytecode
 from scanner.detectors import DETECTOR_REGISTRY, get_all_detectors
-from scanner.detectors.reentrancy import ReentrancyDetector, detect_reentrancy
+from scanner.detectors.reentrancy import (
+    ReentrancyDetector,
+    detect_reentrancy,
+    detect_reentrancy_bytecode,
+)
 
 
 def test_detector_registered():
@@ -76,11 +80,36 @@ def test_detect_from_source_returns_empty(compiled_reentrancy_patterns):
     assert detector.detect_from_source(contracts) == []
 
 
-def test_detect_from_bytecode_returns_empty(compiled_reentrancy_patterns):
-    """Bytecode corroboration is internal to detect_reentrancy, not a separate hook."""
+def test_detect_from_bytecode_reports_bytecode_fallback():
+    from scanner.bytecode.loader import ContractBytecode
+
     detector = ReentrancyDetector()
-    bytecodes = extract_bytecode(compiled_reentrancy_patterns)
-    assert detector.detect_from_bytecode(bytecodes) == []
+    bytecodes = [
+        ContractBytecode(
+            contract_name="RawReentrant",
+            creation_bytecode="",
+            deployed_bytecode="f1600055",
+        )
+    ]
+    findings = detector.detect_from_bytecode(bytecodes)
+    assert findings, "Expected bytecode fallback findings for vulnerable reentrancy patterns"
+    assert any("(bytecode)" in finding.title.lower() for finding in findings)
+    assert all(finding.swc_id == "SWC-107" for finding in findings)
+
+
+def test_detect_reentrancy_bytecode_raw_pattern():
+    from scanner.bytecode.loader import ContractBytecode
+
+    finding = detect_reentrancy_bytecode(
+        ContractBytecode(
+            contract_name="RawReentrant",
+            creation_bytecode="",
+            deployed_bytecode="f1600055",
+        )
+    )
+    assert len(finding) == 1
+    assert finding[0].title == "Potential reentrancy pattern (bytecode)"
+    assert finding[0].confidence == "low"
 
 
 def test_example_contract_under_contracts_src():
@@ -99,3 +128,80 @@ def test_example_contract_under_contracts_src():
 
     safe_ex = [f for f in findings_ex if f.contract == "SafeReentrancyCEI"]
     assert safe_ex == []
+
+
+def test_legacy_call_value_pattern_is_detected():
+    from pathlib import Path
+
+    from scanner.compiler.solc import compile_source
+
+    fixture = Path("smartbugs-curated/dataset/reentrancy/reentrancy_simple.sol")
+    out = compile_source(fixture, version="0.4.15")
+    findings = detect_reentrancy(out)
+
+    vuln = [f for f in findings if f.contract == "Reentrance" and f.function == "withdrawBalance"]
+    assert vuln, "Legacy call.value()() reentrancy pattern should be detected"
+    assert vuln[0].location is not None
+    assert vuln[0].location.line_start == 24
+
+
+def test_legacy_ast_only_contract_is_detected():
+    from pathlib import Path
+
+    from scanner.compiler.solc import compile_source
+
+    fixture = Path("smartbugs-curated/dataset/reentrancy/etherstore.sol")
+    out = compile_source(fixture, version="0.4.11")
+    findings = detect_reentrancy(out)
+
+    vuln = [f for f in findings if f.contract == "EtherStore" and f.function == "withdrawFunds"]
+    assert vuln, "Legacy AST-only reentrancy example should be detected"
+    assert vuln[0].location is not None
+    assert vuln[0].location.line_start == 27
+
+
+def test_storage_alias_reentrancy_pattern_is_detected():
+    from pathlib import Path
+
+    from scanner.compiler.solc import compile_source
+
+    fixture = Path("smartbugs-curated/dataset/reentrancy/0x7541b76cb60f4c60af330c208b0623b7f54bf615.sol")
+    out = compile_source(fixture, version="0.4.25")
+    findings = detect_reentrancy(out)
+
+    vuln = [f for f in findings if f.contract == "U_BANK" and f.function == "Collect"]
+    assert vuln, "Storage-alias write after external call should be detected"
+    assert vuln[0].location is not None
+    assert vuln[0].location.line_start == 29
+
+
+def test_helper_call_with_external_interaction_is_detected():
+    from pathlib import Path
+
+    from scanner.compiler.solc import compile_source
+
+    fixture = Path("smartbugs-curated/dataset/reentrancy/reentrancy_bonus.sol")
+    out = compile_source(fixture, version="0.4.24")
+    findings = detect_reentrancy(out)
+
+    vuln = [
+        f for f in findings if f.contract == "Reentrancy_bonus" and f.function == "getFirstWithdrawalBonus"
+    ]
+    assert vuln, "Caller state writes after helper-triggered external interaction should be detected"
+    assert vuln[0].location is not None
+    assert vuln[0].location.line_start == 28
+
+
+def test_modifier_with_external_interaction_is_detected():
+    from pathlib import Path
+
+    from scanner.compiler.solc import compile_source
+
+    fixture = Path("smartbugs-curated/dataset/reentrancy/modifier_reentrancy.sol")
+    out = compile_source(fixture, version="0.4.24")
+    findings = detect_reentrancy(out)
+
+    vuln = [f for f in findings if f.contract == "ModifierEntrancy" and f.function == "airDrop"]
+    assert vuln, "External interaction hidden in an applied modifier should be detected"
+    assert vuln[0].location is not None
+    assert vuln[0].location.line_start == 15

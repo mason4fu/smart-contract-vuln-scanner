@@ -148,3 +148,16 @@ def test_constructor_candidate_tagged(compiled_wrong_constructor_name):
     ctor_like = next(f for f in contract.functions if f.name == "Constructor")
     assert not ctor_like.is_constructor
     assert ctor_like.is_constructor_candidate
+
+
+def test_config_surface_marks_treasury_as_config_set(compiled_config_surface):
+    contracts = analyze_source(compiled_config_surface)
+    contract = next(c for c in contracts if c.name == "ConfigSurface")
+
+    set_treasury = next(f for f in contract.functions if f.name == "setTreasury")
+    set_counter = next(f for f in contract.functions if f.name == "setCounter")
+    set_treasury_safe = next(f for f in contract.functions if f.name == "setTreasurySafe")
+
+    assert any(action.kind == "config_set" for action in set_treasury.sensitive_actions)
+    assert not any(action.kind == "config_set" for action in set_counter.sensitive_actions)
+    assert any(action.kind == "config_set" for action in set_treasury_safe.sensitive_actions)

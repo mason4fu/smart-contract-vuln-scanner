@@ -44,6 +44,29 @@ def test_cli_scan_sol_file_json(tmp_path):
     assert isinstance(data, list)
 
 
+def test_cli_scan_sol_file_sarif(tmp_path):
+    result = runner.invoke(
+        app,
+        [
+            "scan",
+            str(FIXTURES_DIR / "TxOriginVuln.sol"),
+            "--format",
+            "sarif",
+            "--output",
+            str(tmp_path),
+        ],
+    )
+    assert result.exit_code == 0
+    report_files = list(tmp_path.glob("*.sarif"))
+    assert len(report_files) == 1
+    import json
+
+    data = json.loads(report_files[0].read_text())
+    assert data["version"] == "2.1.0"
+    assert len(data["runs"]) == 1
+    assert data["runs"][0]["results"]
+
+
 def test_cli_scan_safe_contract(tmp_path):
     result = runner.invoke(
         app,
@@ -65,6 +88,15 @@ def test_cli_scan_directory(tmp_path):
         ["scan", str(FIXTURES_DIR), "--format", "text", "--output", str(tmp_path)],
     )
     assert result.exit_code == 0
+    assert "Project Summary" in result.stdout
+    summary_files = list(tmp_path.glob("*.project-summary.json"))
+    assert len(summary_files) == 1
+    import json
+
+    summary = json.loads(summary_files[0].read_text())
+    assert summary["inputs"]["solidity_files"] >= 1
+    assert "top_files" in summary
+    assert "top_contracts" in summary
 
 
 def test_cli_scan_missing_target():
@@ -157,6 +189,34 @@ def test_cli_scan_detector_reentrancy_safe_contract_no_findings():
     )
     assert result.exit_code == 0
     assert "No findings" in result.stdout
+
+
+def test_cli_scan_raw_bytecode_reentrancy(tmp_path):
+    bytecode_file = tmp_path / "reentrant.bin"
+    bytecode_file.write_text("f1600055", encoding="utf-8")
+
+    result = runner.invoke(
+        app,
+        [
+            "scan",
+            str(bytecode_file),
+            "--detector",
+            "reentrancy",
+            "--bytecode-only",
+            "--format",
+            "json",
+            "--output",
+            str(tmp_path),
+        ],
+    )
+
+    assert result.exit_code == 0
+    import json
+
+    data = json.loads((tmp_path / "reentrant.json").read_text(encoding="utf-8"))
+    assert len(data) == 1
+    assert data[0]["swc_id"] == "SWC-107"
+    assert "(bytecode)" in data[0]["title"].lower()
 
 
 def test_cli_scan_unknown_detector_exits_error():
