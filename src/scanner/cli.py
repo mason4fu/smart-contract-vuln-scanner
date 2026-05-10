@@ -159,6 +159,11 @@ def scan(
     from scanner.config import load_config
     from scanner.detectors import get_all_detectors
     from scanner.models.findings import Finding
+    from scanner.output.project_summary import (
+        build_project_summary,
+        render_project_summary_text,
+        write_project_summary,
+    )
     from scanner.output.report import write_report
     from scanner.output.rich_report import print_rich_findings
 
@@ -309,6 +314,20 @@ def scan(
     report_path = output / f"{stem}.{fmt}"
     write_report(unique_findings, report_path, fmt)
     console.print(f"\nReport written to [bold]{report_path}[/bold]")
+
+    if target.is_dir() or len(sol_files) + len(json_files) + len(bin_files) > 1:
+        project_summary = build_project_summary(
+            unique_findings,
+            target=target,
+            sol_files=sol_files,
+            json_files=json_files,
+            bin_files=bin_files,
+        )
+        console.print()
+        console.print(render_project_summary_text(project_summary))
+        summary_path = output / f"{stem}.project-summary.json"
+        write_project_summary(project_summary, summary_path)
+        console.print(f"Project summary written to [bold]{summary_path}[/bold]")
 
     raise typer.Exit(0)
 

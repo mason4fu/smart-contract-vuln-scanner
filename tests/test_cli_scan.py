@@ -65,6 +65,15 @@ def test_cli_scan_directory(tmp_path):
         ["scan", str(FIXTURES_DIR), "--format", "text", "--output", str(tmp_path)],
     )
     assert result.exit_code == 0
+    assert "Project Summary" in result.stdout
+    summary_files = list(tmp_path.glob("*.project-summary.json"))
+    assert len(summary_files) == 1
+    import json
+
+    summary = json.loads(summary_files[0].read_text())
+    assert summary["inputs"]["solidity_files"] >= 1
+    assert "top_files" in summary
+    assert "top_contracts" in summary
 
 
 def test_cli_scan_missing_target():
