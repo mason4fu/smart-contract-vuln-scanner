@@ -3,7 +3,7 @@
 import json
 
 from scanner.models.findings import Finding, Severity, SourceLocation
-from scanner.output.report import render_json, render_text
+from scanner.output.report import render_json, render_sarif, render_text
 
 
 def test_finding_creation():
@@ -57,3 +57,47 @@ def test_render_json_roundtrip():
     result = json.loads(render_json([f]))
     assert len(result) == 1
     assert result[0]["title"] == "Bug"
+
+
+def test_render_sarif_empty():
+    """render_sarif with no findings should still produce a valid SARIF shell."""
+    result = json.loads(render_sarif([]))
+    assert result["version"] == "2.1.0"
+    assert len(result["runs"]) == 1
+    assert result["runs"][0]["results"] == []
+
+
+def test_render_sarif_includes_rules_results_and_locations():
+    finding = Finding(
+        detector="access-control",
+        title="Missing authorization on sensitive function",
+        description="Any caller can invoke this function.",
+        severity=Severity.HIGH,
+        confidence="high",
+        contract="Vault",
+        function="setTreasury",
+        swc_id="SWC-105",
+        remediation="Add an onlyOwner check.",
+        location=SourceLocation(
+            file="Vault.sol",
+            line_start=12,
+            line_end=12,
+            column_start=5,
+            column_end=22,
+        ),
+    )
+
+    result = json.loads(render_sarif([finding]))
+    run = result["runs"][0]
+    assert len(run["tool"]["driver"]["rules"]) == 1
+    assert len(run["results"]) == 1
+
+    rule = run["tool"]["driver"]["rules"][0]
+    sarif_result = run["results"][0]
+
+    assert rule["id"].startswith("SWC-105:")
+    assert rule["properties"]["detector"] == "access-control"
+    assert sarif_result["level"] == "error"
+    assert sarif_result["ruleId"] == rule["id"]
+    assert sarif_result["locations"][0]["physicalLocation"]["artifactLocation"]["uri"] == "Vault.sol"
+    assert sarif_result["locations"][0]["physicalLocation"]["region"]["startLine"] == 12

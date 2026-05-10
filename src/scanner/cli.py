@@ -111,7 +111,7 @@ def scan(
     ] = Path("reports"),
     fmt: Annotated[
         str,
-        typer.Option("--format", "-f", help="Output format: json or text."),
+        typer.Option("--format", "-f", help="Output format: json, text, or sarif."),
     ] = "text",
     detector: Annotated[
         str,

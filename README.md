@@ -33,6 +33,7 @@ analysis. Run
 ```bash
 uv run scanner scan contracts/MyContract.sol
 uv run scanner scan contracts/MyContract.sol --format json
+uv run scanner scan contracts/MyContract.sol --format sarif
 ```
 
 ### Scan a directory
@@ -57,7 +58,7 @@ uv run scanner scan MyContract.bin
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--format`, `-f` | `text` | Output format: `json` or `text` |
+| `--format`, `-f` | `text` | Output format: `json`, `text`, or `sarif` |
 | `--output`, `-o` | `reports/` | Report output directory |
 | `--detector`, `-d` | all | Run only a specific detector |
 | `--bytecode-only` | false | Skip source analysis |
@@ -189,6 +190,15 @@ Implementation: `src/scanner/detectors/arithmetic.py` · Tests: `tests/test_arit
 
 Saved benchmark artifacts for the final report live under `reports/final-report/`.
 See `reports/final-report/summary.md` and [`docs/final-report-prep.md`](docs/final-report-prep.md).
+
+For CI-style integration, the scanner can also emit SARIF:
+
+```bash
+uv run scanner scan contracts/ --format sarif --output reports
+```
+
+This writes a `.sarif` file suitable for code-scanning workflows and a
+`*.project-summary.json` artifact for multi-file scans.
 
 Baseline comparisons are also generated now:
 

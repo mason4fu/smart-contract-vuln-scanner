@@ -44,6 +44,29 @@ def test_cli_scan_sol_file_json(tmp_path):
     assert isinstance(data, list)
 
 
+def test_cli_scan_sol_file_sarif(tmp_path):
+    result = runner.invoke(
+        app,
+        [
+            "scan",
+            str(FIXTURES_DIR / "TxOriginVuln.sol"),
+            "--format",
+            "sarif",
+            "--output",
+            str(tmp_path),
+        ],
+    )
+    assert result.exit_code == 0
+    report_files = list(tmp_path.glob("*.sarif"))
+    assert len(report_files) == 1
+    import json
+
+    data = json.loads(report_files[0].read_text())
+    assert data["version"] == "2.1.0"
+    assert len(data["runs"]) == 1
+    assert data["runs"][0]["results"]
+
+
 def test_cli_scan_safe_contract(tmp_path):
     result = runner.invoke(
         app,
