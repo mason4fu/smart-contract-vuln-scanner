@@ -46,3 +46,15 @@ class Finding(BaseModel):
     function: str = Field(default="", description="Function name if applicable.")
     swc_id: str = Field(default="", description="SWC registry ID (e.g. SWC-115).")
     remediation: str = Field(default="", description="Suggested fix for the finding.")
+    remediation_steps: list[str] = Field(
+        default_factory=list,
+        description="Ordered concrete steps for fixing the issue.",
+    )
+    secure_pattern: str = Field(
+        default="",
+        description="Short secure-coding pattern name or summary.",
+    )
+    remediation_example: str = Field(
+        default="",
+        description="Example fix template or code snippet.",
+    )

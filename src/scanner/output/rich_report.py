@@ -79,9 +79,20 @@ def print_rich_findings(findings: list[Finding], source_texts: dict[str, str]) -
                 lines.append(snippet)
 
         # Remediation
+        if finding.secure_pattern:
+            lines.append("")
+            lines.append(f"[bold]Secure pattern:[/bold] {finding.secure_pattern}")
+
         if finding.remediation:
             lines.append("")
             lines.append(f"[bold]Remediation:[/bold] {finding.remediation}")
+        if finding.remediation_steps:
+            lines.append("[bold]Steps:[/bold]")
+            for idx, step in enumerate(finding.remediation_steps, start=1):
+                lines.append(f"  {idx}. {step}")
+        if finding.remediation_example:
+            lines.append("[bold]Example fix:[/bold]")
+            lines.append(finding.remediation_example)
 
         # SWC reference
         if finding.swc_id:

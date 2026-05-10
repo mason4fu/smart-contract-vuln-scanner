@@ -46,6 +46,25 @@ def test_render_text_empty():
     assert "No findings" in result
 
 
+def test_render_text_includes_structured_remediation():
+    finding = Finding(
+        detector="test",
+        title="Bug",
+        description="A bug.",
+        severity=Severity.MEDIUM,
+        remediation="Do the fix.",
+        remediation_steps=["Step one", "Step two"],
+        secure_pattern="Guard privileged entrypoints",
+        remediation_example="require(msg.sender == owner);",
+    )
+
+    result = render_text([finding])
+    assert "Secure pattern: Guard privileged entrypoints" in result
+    assert "Remediation: Do the fix." in result
+    assert "- Step one" in result
+    assert "Example fix: require(msg.sender == owner);" in result
+
+
 def test_render_json_roundtrip():
     """Findings should survive JSON serialization."""
     f = Finding(
@@ -78,6 +97,9 @@ def test_render_sarif_includes_rules_results_and_locations():
         function="setTreasury",
         swc_id="SWC-105",
         remediation="Add an onlyOwner check.",
+        remediation_steps=["Add onlyOwner to the entrypoint", "Re-test non-owner access"],
+        secure_pattern="Guard privileged entrypoints before sensitive actions",
+        remediation_example="function setTreasury(address next) external onlyOwner { treasury = next; }",
         location=SourceLocation(
             file="Vault.sol",
             line_start=12,
@@ -101,3 +123,5 @@ def test_render_sarif_includes_rules_results_and_locations():
     assert sarif_result["ruleId"] == rule["id"]
     assert sarif_result["locations"][0]["physicalLocation"]["artifactLocation"]["uri"] == "Vault.sol"
     assert sarif_result["locations"][0]["physicalLocation"]["region"]["startLine"] == 12
+    assert "Secure pattern" in rule["help"]["text"]
+    assert sarif_result["properties"]["remediationSteps"]

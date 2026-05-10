@@ -11,6 +11,7 @@ from scanner.detectors import BaseDetector, register_detector
 from scanner.models.findings import Finding, Severity
 from scanner.models.ir import ContractInfo
 from scanner.models.unchecked_calls import CallResultStatus, ExternalCallSite
+from scanner.remediation import unchecked_call_plan
 
 _DETECTOR_NAME = "unchecked-external-calls"
 _REPORTABLE_SOURCE_STATUSES = {
@@ -90,10 +91,7 @@ def _finding_from_source_site(site: ExternalCallSite) -> Finding:
         contract=site.contract,
         function=site.function,
         swc_id="SWC-104",
-        remediation=(
-            "Check the returned success boolean with require/assert or explicit "
-            "if-failure handling before continuing."
-        ),
+        **unchecked_call_plan(bytecode=False),
     )
 
 
@@ -123,7 +121,7 @@ def _finding_from_bytecode_site(site: ExternalCallSite) -> Finding:
         confidence=confidence,
         contract=site.contract,
         swc_id="SWC-104",
-        remediation="Ensure CALL-family success is checked before state changes or continuation.",
+        **unchecked_call_plan(bytecode=True),
     )
 
 

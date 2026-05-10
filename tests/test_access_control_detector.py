@@ -38,6 +38,9 @@ def test_tx_origin_vuln_source_findings(compiled_tx_origin_vuln):
     assert f.severity == Severity.HIGH
     assert f.contract == "TxOriginVuln"
     assert "withdraw" in f.function or "tx.origin" in f.description
+    assert f.remediation_steps
+    assert f.secure_pattern
+    assert "msg.sender" in f.remediation_example
 
 
 def test_tx_origin_deduplicated_per_function(compiled_tx_origin_twice):

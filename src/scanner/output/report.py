@@ -78,6 +78,16 @@ def render_text(findings: list[Finding]) -> str:
         if f.location:
             lines.append(f"    Location: {f.location.file}:{f.location.line_start}")
         lines.append(f"    {f.description}")
+        if f.secure_pattern:
+            lines.append(f"    Secure pattern: {f.secure_pattern}")
+        if f.remediation:
+            lines.append(f"    Remediation: {f.remediation}")
+        if f.remediation_steps:
+            lines.append("    Steps:")
+            for step in f.remediation_steps:
+                lines.append(f"      - {step}")
+        if f.remediation_example:
+            lines.append(f"    Example fix: {f.remediation_example}")
         lines.append("")
     return "\n".join(lines)
 
@@ -124,7 +134,7 @@ def _sarif_rules(findings: list[Finding]) -> list[dict[str, Any]]:
             "shortDescription": {"text": short_desc},
             "fullDescription": {"text": finding.description},
             "help": {
-                "text": finding.remediation or finding.description,
+                "text": _sarif_help_text(finding),
             },
             "properties": {
                 "detector": finding.detector,
@@ -151,6 +161,9 @@ def _sarif_result(finding: Finding) -> dict[str, Any]:
             "function": finding.function,
             "swcId": finding.swc_id,
             "remediation": finding.remediation,
+            "remediationSteps": finding.remediation_steps,
+            "securePattern": finding.secure_pattern,
+            "remediationExample": finding.remediation_example,
         },
     }
     if finding.location and finding.location.file:
@@ -191,3 +204,14 @@ def _sarif_rule_id(finding: Finding) -> str:
 def _slugify(text: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
     return slug[:80]
+
+
+def _sarif_help_text(finding: Finding) -> str:
+    chunks = [finding.remediation or finding.description]
+    if finding.secure_pattern:
+        chunks.append(f"Secure pattern: {finding.secure_pattern}.")
+    if finding.remediation_steps:
+        chunks.append("Steps: " + " ".join(f"{idx + 1}. {step}" for idx, step in enumerate(finding.remediation_steps)))
+    if finding.remediation_example:
+        chunks.append(f"Example: {finding.remediation_example}")
+    return " ".join(chunk for chunk in chunks if chunk)

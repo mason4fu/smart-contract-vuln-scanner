@@ -16,6 +16,7 @@ from scanner.bytecode.loader import ContractBytecode, extract_bytecode
 from scanner.detectors import BaseDetector, register_detector
 from scanner.models.findings import Finding, Severity, SourceLocation
 from scanner.models.ir import ContractInfo
+from scanner.remediation import reentrancy_plan
 from scanner.utils.source_map import build_line_map, offset_to_line_col
 
 _CALL_MNEMONICS = frozenset({"CALL", "DELEGATECALL", "STATICCALL", "CALLCODE"})
@@ -150,6 +151,7 @@ def detect_reentrancy(compiler_output: dict[str, Any]) -> list[Finding]:
                         contract=contract_name,
                         function=function_name,
                         swc_id="SWC-107",
+                        **reentrancy_plan(bytecode=False),
                     )
                 )
 
@@ -672,9 +674,6 @@ def detect_reentrancy_bytecode(bytecode: ContractBytecode) -> list[Finding]:
             confidence=confidence,
             contract=bytecode.contract_name,
             swc_id="SWC-107",
-            remediation=(
-                "Review external-call ordering and move state effects before interactions "
-                "where possible."
-            ),
+            **reentrancy_plan(bytecode=True),
         )
     ]

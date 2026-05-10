@@ -15,6 +15,7 @@ from scanner.bytecode.loader import ContractBytecode
 from scanner.detectors import BaseDetector, register_detector
 from scanner.models.findings import Finding, Severity, SourceLocation
 from scanner.models.ir import ContractInfo
+from scanner.remediation import arithmetic_plan
 from scanner.utils.source_map import build_line_map, offset_to_line_col
 
 _DETECTOR_NAME = "arithmetic"
@@ -148,10 +149,7 @@ def detect_arithmetic_bytecode(bytecode: ContractBytecode) -> list[Finding]:
                 confidence="low",
                 contract=bytecode.contract_name,
                 swc_id="SWC-101",
-                remediation=(
-                    "Review source arithmetic around storage updates and ensure bounds checks "
-                    "or checked arithmetic semantics."
-                ),
+                **arithmetic_plan(bytecode=True),
             )
         )
     return findings
@@ -243,10 +241,7 @@ def _evaluate_node(
         contract=contract_name,
         function=function_name,
         swc_id="SWC-101",
-        remediation=(
-            "Use Solidity >=0.8 checked arithmetic or add explicit bounds checks "
-            "before arithmetic updates."
-        ),
+        **arithmetic_plan(bytecode=False),
     )
 
 

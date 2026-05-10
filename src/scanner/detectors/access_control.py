@@ -19,6 +19,14 @@ from scanner.bytecode.loader import ContractBytecode
 from scanner.detectors import BaseDetector, register_detector
 from scanner.models.findings import Finding, Severity
 from scanner.models.ir import ContractInfo
+from scanner.remediation import (
+    constructor_init_plan,
+    missing_auth_plan,
+    renounce_plan,
+    role_grant_plan,
+    tx_origin_plan,
+    uninitialized_owner_plan,
+)
 
 _DETECTOR_NAME = "access-control"
 
@@ -182,7 +190,7 @@ def _check_tx_origin_source(contract: ContractInfo) -> list[Finding]:
                     contract=contract.name,
                     function=func.name,
                     swc_id="SWC-115",
-                    remediation="Replace tx.origin with msg.sender for authorization checks.",
+                    **tx_origin_plan(),
                 )
             )
             continue
@@ -205,7 +213,7 @@ def _check_tx_origin_source(contract: ContractInfo) -> list[Finding]:
                     contract=contract.name,
                     function=func.name,
                     swc_id="SWC-115",
-                    remediation="Replace tx.origin with msg.sender for authorization checks.",
+                    **tx_origin_plan(),
                 )
             )
     return findings
@@ -243,7 +251,7 @@ def _check_missing_auth_source(contract: ContractInfo) -> list[Finding]:
                 contract=contract.name,
                 function=func.name,
                 swc_id="SWC-105",
-                remediation="Add an onlyOwner modifier or require(msg.sender == owner) check.",
+                **missing_auth_plan(subject=f"function '{func.name}'"),
             )
         )
     return findings
@@ -281,11 +289,7 @@ def _check_wrong_constructor_surface(contract: ContractInfo) -> list[Finding]:
                 contract=contract.name,
                 function=func.name,
                 swc_id="SWC-118",
-                remediation=(
-                    "Use the constructor keyword for one-time initialization "
-                    "or protect initializer "
-                    "functions so they cannot be called by arbitrary users."
-                ),
+                **constructor_init_plan(),
             )
         )
 
@@ -315,7 +319,7 @@ def _check_admin_surface_mutation(contract: ContractInfo) -> list[Finding]:
                 contract=contract.name,
                 function=func.name,
                 swc_id="SWC-105",
-                remediation="Protect admin-surface state mutation with owner/role authorization.",
+                **missing_auth_plan(subject=f"admin surface '{func.name}'"),
             )
         )
     return findings
@@ -353,7 +357,7 @@ def _check_uninitialized_owner(contract: ContractInfo) -> list[Finding]:
                 confidence="medium",
                 contract=contract.name,
                 swc_id="SWC-105",
-                remediation="Set owner = msg.sender in the constructor.",
+                **uninitialized_owner_plan(),
             )
         )
     return findings
@@ -385,9 +389,7 @@ def _check_renounce_ownership(contract: ContractInfo) -> list[Finding]:
                 contract=contract.name,
                 function=renounce_func.name,
                 swc_id="SWC-106",
-                remediation=(
-                    "Use a two-step ownership transfer pattern with pendingOwner + acceptOwnership."
-                ),
+                **renounce_plan(),
             )
         )
     return findings
@@ -416,7 +418,7 @@ def _check_unguarded_role_grant(contract: ContractInfo) -> list[Finding]:
                     contract=contract.name,
                     function=func.name,
                     swc_id="SWC-105",
-                    remediation="Add an authorization guard to the role grant function.",
+                    **role_grant_plan(),
                 )
             )
     return findings
