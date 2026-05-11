@@ -4,6 +4,14 @@
   "base_path": "entries/docs",
   "entries": [
     {
+      "swc_id": "SWC-104",
+      "doc": "SWC-104.md",
+      "snippet": "unchecked_return_value.sol",
+      "label": "vulnerable",
+      "vuln_functions": ["callnotchecked"],
+      "lines": [10]
+    },
+    {
       "swc_id": "SWC-105",
       "doc": "SWC-105.md",
       "snippet": "multiowned_not_vulnerable.sol",

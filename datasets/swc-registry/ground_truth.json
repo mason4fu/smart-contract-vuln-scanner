@@ -1,0 +1,107 @@
+{
+  "repo": "SmartContractSecurity/SWC-registry",
+  "commit": "1b6227074ecd180b374e4844153afdda0332f979",
+  "entries": [
+    {
+      "file": "SWC-104/unchecked_return_value.sol",
+      "label": "vulnerable",
+      "swc_id": "SWC-104",
+      "doc": "SWC-104.md",
+      "snippet": "unchecked_return_value.sol",
+      "vuln_functions": [
+        "callnotchecked"
+      ],
+      "lines": [
+        10
+      ]
+    },
+    {
+      "file": "SWC-105/multiowned_not_vulnerable.sol",
+      "label": "safe",
+      "swc_id": "SWC-105",
+      "doc": "SWC-105.md",
+      "snippet": "multiowned_not_vulnerable.sol"
+    },
+    {
+      "file": "SWC-105/multiowned_vulnerable.sol",
+      "label": "vulnerable",
+      "swc_id": "SWC-105",
+      "doc": "SWC-105.md",
+      "snippet": "multiowned_vulnerable.sol",
+      "vuln_functions": [
+        "newOwner"
+      ]
+    },
+    {
+      "file": "SWC-105/simple_ether_drain.sol",
+      "label": "vulnerable",
+      "swc_id": "SWC-105",
+      "doc": "SWC-105.md",
+      "snippet": "simple_ether_drain.sol",
+      "vuln_functions": [
+        "withdrawAllAnyone"
+      ]
+    },
+    {
+      "file": "SWC-105/wallet_03_wrong_constructor.sol",
+      "label": "vulnerable",
+      "swc_id": "SWC-105",
+      "doc": "SWC-105.md",
+      "snippet": "wallet_03_wrong_constructor.sol",
+      "vuln_functions": [
+        "initWallet"
+      ]
+    },
+    {
+      "file": "SWC-115/mycontract.sol",
+      "label": "vulnerable",
+      "swc_id": "SWC-115",
+      "doc": "SWC-115.md",
+      "snippet": "mycontract.sol",
+      "vuln_functions": [
+        "sendTo"
+      ]
+    },
+    {
+      "file": "SWC-115/mycontract_fixed.sol",
+      "label": "safe",
+      "swc_id": "SWC-115",
+      "doc": "SWC-115.md",
+      "snippet": "mycontract_fixed.sol"
+    },
+    {
+      "file": "SWC-118/incorrect_constructor_name1.sol",
+      "label": "vulnerable",
+      "swc_id": "SWC-118",
+      "doc": "SWC-118.md",
+      "snippet": "incorrect_constructor_name1.sol",
+      "vuln_functions": [
+        "missing"
+      ]
+    },
+    {
+      "file": "SWC-118/incorrect_constructor_name1_fixed.sol",
+      "label": "safe",
+      "swc_id": "SWC-118",
+      "doc": "SWC-118.md",
+      "snippet": "incorrect_constructor_name1_fixed.sol"
+    },
+    {
+      "file": "SWC-118/incorrect_constructor_name2.sol",
+      "label": "vulnerable",
+      "swc_id": "SWC-118",
+      "doc": "SWC-118.md",
+      "snippet": "incorrect_constructor_name2.sol",
+      "vuln_functions": [
+        "Constructor"
+      ]
+    },
+    {
+      "file": "SWC-118/incorrect_constructor_name2_fixed.sol",
+      "label": "safe",
+      "swc_id": "SWC-118",
+      "doc": "SWC-118.md",
+      "snippet": "incorrect_constructor_name2_fixed.sol"
+    }
+  ]
+}
