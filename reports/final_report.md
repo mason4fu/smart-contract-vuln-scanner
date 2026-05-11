@@ -330,7 +330,7 @@ This is a much stronger result than our earlier prototype state, where legacy pa
 
 [Draft owner: Shared]
 
-**Table 3. Baseline comparison**
+**Table 3. Baseline comparison for precision/recall/F1-compatible detectors**
 
 | Tool / Detector | Benchmark | Compiled | Precision | Recall | F1 | Notes |
 |---|---|---|---:|---:|---:|---|
@@ -342,8 +342,13 @@ This is a much stronger result than our earlier prototype state, where legacy pa
 | Slither / Unchecked calls | Not-So-Smart-Contracts | 1/1 | 1.000 | 1.000 | 1.000 |  |
 | Our scanner / Unchecked calls | SolidiFI (supplemental) | 3/3 | 1.000 | 0.898 | 0.946 |  |
 | Slither / Unchecked calls | SolidiFI (supplemental) | 3/3 | 1.000 | 0.695 | 0.820 |  |
-| Our scanner / Reentrancy | SmartBugs Curated | 31/31 | n/a | 1.000 contract, 0.968 line | n/a | One line-overlap miss |
-| Slither / Reentrancy | SmartBugs Curated | 29/31 | n/a | 1.000 contract, 1.000 line on compiled subset | n/a | Better on compiled subset, lower compile coverage |
+
+**Table 4. Reentrancy baseline comparison**
+
+| Tool | Benchmark | Compiled | Contract Recall | Line Recall | Notes |
+|---|---|---|---:|---:|---|
+| Our scanner | SmartBugs Curated | 31/31 | 1.000 | 0.968 | One line-overlap miss |
+| Slither | SmartBugs Curated | 29/31 | 1.000 | 1.000 | Perfect recall on compiled subset, but lower compile coverage |
 
 The baseline comparison supports three main conclusions:
 
