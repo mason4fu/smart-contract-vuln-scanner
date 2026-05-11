@@ -13,9 +13,11 @@ subsets with line-level matching:
 - SmartBugs Curated unchecked low-level calls subset
 - SolidiFI-benchmark Unchecked-Send and Unhandled-Exceptions injected samples
 - Not-So-Smart-Contracts unchecked_external_call example
+- SWC Registry pinned `SWC-104` sample
 
 The arithmetic scanner is evaluated against the SmartBugs Curated arithmetic
-subset with line-level matching.
+subset, a small Not-So-Smart-Contracts arithmetic subset, and a pinned SWC
+Registry arithmetic subset with line-level matching.
 
 ## Datasets
 
@@ -94,6 +96,8 @@ uv run python scripts/evaluate_nssc.py
 # Fetch and evaluate pinned SWC subset
 uv run python scripts/fetch_swc_registry.py
 uv run python scripts/evaluate_swc_registry.py
+uv run python scripts/evaluate_swc_registry_unchecked_calls.py --output reports/final-report/unchecked-calls-swc-registry.json
+uv run python scripts/evaluate_swc_registry_arithmetic.py --output reports/final-report/arithmetic-swc-registry.json
 
 # Fetch and evaluate unchecked external call datasets
 uv run python scripts/fetch_unchecked_call_datasets.py
@@ -101,6 +105,8 @@ uv run python scripts/evaluate_unchecked_calls.py --output reports/unchecked-cal
 
 # Evaluate arithmetic (SWC-101) subset
 uv run python scripts/evaluate_arithmetic.py --output reports/arithmetic-eval.json
+uv run python scripts/fetch_nssc.py
+uv run python scripts/evaluate_nssc_arithmetic.py --output reports/final-report/arithmetic-nssc.json
 ```
 
 ## Arithmetic (SWC-101)
@@ -117,6 +123,8 @@ uv run python scripts/evaluate_arithmetic.py --output reports/arithmetic-eval.js
 | Dataset | Compiled | TP | FP | FN | Precision | Recall | F1 |
 |---------|----------|----|----|----|-----------|--------|----|
 | SmartBugs arithmetic subset | 15/15 | 21 | 1 | 2 | 0.955 | 0.913 | 0.933 |
+| Not-So-Smart-Contracts integer_overflow subset | 1/1 | 1 | 0 | 0 | 1.000 | 1.000 | 1.000 |
+| SWC Registry arithmetic subset | 14/14 | 9 | 1 | 0 | 0.900 | 1.000 | 0.947 |
 
 ### Notes
 
@@ -152,6 +160,7 @@ uv run python scripts/evaluate_arithmetic.py --output reports/arithmetic-eval.js
 | SmartBugs Curated unchecked subset | 5/5 | 10 | 0 | 0 | 1.000 | 1.000 | 1.000 |
 | SolidiFI Unhandled-Exceptions subset | 3/3 | 53 | 0 | 6 | 1.000 | 0.898 | 0.946 |
 | Not-So-Smart-Contracts unchecked external call | 1/1 | 4 | 0 | 0 | 1.000 | 1.000 | 1.000 |
+| SWC Registry unchecked return value sample | 1/1 | 1 | 0 | 0 | 1.000 | 1.000 | 1.000 |
 | Primary scoped aggregate | 9/9 | 67 | 0 | 6 | 1.000 | 0.918 | 0.957 |
 
 The raw all-label diagnostic aggregate is also printed for transparency. It

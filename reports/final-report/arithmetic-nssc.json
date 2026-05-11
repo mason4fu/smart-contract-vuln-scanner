@@ -1,0 +1,47 @@
+{
+  "ground_truth": {
+    "integer_overflow/integer_overflow_1.sol": {
+      "label": "vulnerable",
+      "lines": [
+        7
+      ]
+    }
+  },
+  "results": [
+    {
+      "dataset": "not-so-smart-contracts",
+      "file": "integer_overflow/integer_overflow_1.sol",
+      "label": "vulnerable",
+      "ground_truth_lines": [
+        7
+      ],
+      "solc_version": "0.4.25",
+      "compile_error": null,
+      "source_findings": [
+        {
+          "title": "Potential integer overflow/underflow in arithmetic operation",
+          "contract": "Overflow",
+          "function": "add",
+          "severity": "high",
+          "confidence": "high",
+          "swc_id": "SWC-101",
+          "line_start": 7
+        }
+      ]
+    }
+  ],
+  "aggregate": {
+    "tp": 1,
+    "fp": 0,
+    "fn": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0,
+    "compile_skipped": 0
+  },
+  "protocol": {
+    "granularity": "line-level",
+    "tolerance": 6,
+    "compile_errors": "excluded from precision/recall/F1"
+  }
+}

@@ -13,8 +13,10 @@ FILES_TO_FETCH = [
     "unprotected_function/Unprotected.sol",
     "wrong_constructor_name/incorrect_constructor.sol",
     "wrong_constructor_name/Rubixi_source_code/Rubixi.sol",
+    "integer_overflow/integer_overflow_1.sol",
     "unprotected_function/README.md",
     "wrong_constructor_name/README.md",
+    "integer_overflow/README.md",
 ]
 
 OUTPUT_DIR = Path(__file__).parent.parent / "datasets" / "not-so-smart-contracts"
