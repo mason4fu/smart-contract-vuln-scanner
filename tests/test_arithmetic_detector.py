@@ -51,6 +51,24 @@ def test_suppresses_default_checked_arithmetic_in_solidity_08(compiled_arithmeti
     assert findings == []
 
 
+def test_reports_multiple_findings_per_function(compiled_arithmetic_advanced):
+    findings = detect_arithmetic(compiled_arithmetic_advanced)
+    multi_issue_findings = [f for f in findings if f.function == "multiIssue"]
+    assert len(multi_issue_findings) >= 2
+
+
+def test_suppresses_safe_math_helper_function(compiled_arithmetic_advanced):
+    findings = detect_arithmetic(compiled_arithmetic_advanced)
+    funcs = _finding_functions(findings)
+    assert "safeAdd" not in funcs
+
+
+def test_suppresses_guarded_subtraction(compiled_arithmetic_advanced):
+    findings = detect_arithmetic(compiled_arithmetic_advanced)
+    funcs = _finding_functions(findings)
+    assert "guardedSub" not in funcs
+
+
 def test_reports_unchecked_block_in_solidity_08(compiled_arithmetic_unchecked_08):
     findings = detect_arithmetic(compiled_arithmetic_unchecked_08)
     funcs = _finding_functions(findings)

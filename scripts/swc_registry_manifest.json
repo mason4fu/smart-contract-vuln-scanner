@@ -4,6 +4,97 @@
   "base_path": "entries/docs",
   "entries": [
     {
+      "swc_id": "SWC-101",
+      "doc": "SWC-101.md",
+      "snippet": "tokensalechallenge.sol",
+      "label": "vulnerable",
+      "lines": [21, 23, 30]
+    },
+    {
+      "swc_id": "SWC-101",
+      "doc": "SWC-101.md",
+      "snippet": "integer_overflow_mapping_sym_1.sol",
+      "label": "vulnerable",
+      "lines": [9]
+    },
+    {
+      "swc_id": "SWC-101",
+      "doc": "SWC-101.md",
+      "snippet": "integer_overflow_mapping_sym_1_fixed.sol",
+      "label": "safe"
+    },
+    {
+      "swc_id": "SWC-101",
+      "doc": "SWC-101.md",
+      "snippet": "integer_overflow_minimal.sol",
+      "label": "vulnerable",
+      "lines": [10]
+    },
+    {
+      "swc_id": "SWC-101",
+      "doc": "SWC-101.md",
+      "snippet": "integer_overflow_minimal_fixed.sol",
+      "label": "safe"
+    },
+    {
+      "swc_id": "SWC-101",
+      "doc": "SWC-101.md",
+      "snippet": "integer_overflow_mul.sol",
+      "label": "vulnerable",
+      "lines": [10]
+    },
+    {
+      "swc_id": "SWC-101",
+      "doc": "SWC-101.md",
+      "snippet": "integer_overflow_mul_fixed.sol",
+      "label": "safe"
+    },
+    {
+      "swc_id": "SWC-101",
+      "doc": "SWC-101.md",
+      "snippet": "integer_overflow_multitx_multifunc_feasible.sol",
+      "label": "vulnerable",
+      "lines": [24]
+    },
+    {
+      "swc_id": "SWC-101",
+      "doc": "SWC-101.md",
+      "snippet": "integer_overflow_multitx_multifunc_feasible_fixed.sol",
+      "label": "safe"
+    },
+    {
+      "swc_id": "SWC-101",
+      "doc": "SWC-101.md",
+      "snippet": "integer_overflow_multitx_onefunc_feasible.sol",
+      "label": "vulnerable",
+      "lines": [21]
+    },
+    {
+      "swc_id": "SWC-101",
+      "doc": "SWC-101.md",
+      "snippet": "integer_overflow_multitx_onefunc_feasible_fixed.sol",
+      "label": "safe"
+    },
+    {
+      "swc_id": "SWC-101",
+      "doc": "SWC-101.md",
+      "snippet": "integer_overflow_multitx_onefunc_infeasible.sol",
+      "label": "safe"
+    },
+    {
+      "swc_id": "SWC-101",
+      "doc": "SWC-101.md",
+      "snippet": "overflow_simple_add.sol",
+      "label": "vulnerable",
+      "lines": [7]
+    },
+    {
+      "swc_id": "SWC-101",
+      "doc": "SWC-101.md",
+      "snippet": "overflow_simple_add_fixed.sol",
+      "label": "safe"
+    },
+    {
       "swc_id": "SWC-104",
       "doc": "SWC-104.md",
       "snippet": "unchecked_return_value.sol",

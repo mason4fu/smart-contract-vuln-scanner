@@ -3,6 +3,127 @@
   "commit": "1b6227074ecd180b374e4844153afdda0332f979",
   "entries": [
     {
+      "file": "SWC-101/tokensalechallenge.sol",
+      "label": "vulnerable",
+      "swc_id": "SWC-101",
+      "doc": "SWC-101.md",
+      "snippet": "tokensalechallenge.sol",
+      "lines": [
+        21,
+        23,
+        30
+      ]
+    },
+    {
+      "file": "SWC-101/integer_overflow_mapping_sym_1.sol",
+      "label": "vulnerable",
+      "swc_id": "SWC-101",
+      "doc": "SWC-101.md",
+      "snippet": "integer_overflow_mapping_sym_1.sol",
+      "lines": [
+        9
+      ]
+    },
+    {
+      "file": "SWC-101/integer_overflow_mapping_sym_1_fixed.sol",
+      "label": "safe",
+      "swc_id": "SWC-101",
+      "doc": "SWC-101.md",
+      "snippet": "integer_overflow_mapping_sym_1_fixed.sol"
+    },
+    {
+      "file": "SWC-101/integer_overflow_minimal.sol",
+      "label": "vulnerable",
+      "swc_id": "SWC-101",
+      "doc": "SWC-101.md",
+      "snippet": "integer_overflow_minimal.sol",
+      "lines": [
+        10
+      ]
+    },
+    {
+      "file": "SWC-101/integer_overflow_minimal_fixed.sol",
+      "label": "safe",
+      "swc_id": "SWC-101",
+      "doc": "SWC-101.md",
+      "snippet": "integer_overflow_minimal_fixed.sol"
+    },
+    {
+      "file": "SWC-101/integer_overflow_mul.sol",
+      "label": "vulnerable",
+      "swc_id": "SWC-101",
+      "doc": "SWC-101.md",
+      "snippet": "integer_overflow_mul.sol",
+      "lines": [
+        10
+      ]
+    },
+    {
+      "file": "SWC-101/integer_overflow_mul_fixed.sol",
+      "label": "safe",
+      "swc_id": "SWC-101",
+      "doc": "SWC-101.md",
+      "snippet": "integer_overflow_mul_fixed.sol"
+    },
+    {
+      "file": "SWC-101/integer_overflow_multitx_multifunc_feasible.sol",
+      "label": "vulnerable",
+      "swc_id": "SWC-101",
+      "doc": "SWC-101.md",
+      "snippet": "integer_overflow_multitx_multifunc_feasible.sol",
+      "lines": [
+        24
+      ]
+    },
+    {
+      "file": "SWC-101/integer_overflow_multitx_multifunc_feasible_fixed.sol",
+      "label": "safe",
+      "swc_id": "SWC-101",
+      "doc": "SWC-101.md",
+      "snippet": "integer_overflow_multitx_multifunc_feasible_fixed.sol"
+    },
+    {
+      "file": "SWC-101/integer_overflow_multitx_onefunc_feasible.sol",
+      "label": "vulnerable",
+      "swc_id": "SWC-101",
+      "doc": "SWC-101.md",
+      "snippet": "integer_overflow_multitx_onefunc_feasible.sol",
+      "lines": [
+        21
+      ]
+    },
+    {
+      "file": "SWC-101/integer_overflow_multitx_onefunc_feasible_fixed.sol",
+      "label": "safe",
+      "swc_id": "SWC-101",
+      "doc": "SWC-101.md",
+      "snippet": "integer_overflow_multitx_onefunc_feasible_fixed.sol"
+    },
+    {
+      "file": "SWC-101/integer_overflow_multitx_onefunc_infeasible.sol",
+      "label": "safe",
+      "swc_id": "SWC-101",
+      "doc": "SWC-101.md",
+      "snippet": "integer_overflow_multitx_onefunc_infeasible.sol"
+    },
+    {
+      "file": "SWC-101/overflow_simple_add.sol",
+      "label": "vulnerable",
+      "swc_id": "SWC-101",
+      "doc": "SWC-101.md",
+      "snippet": "overflow_simple_add.sol",
+      "lines": [
+        7
+      ]
+    },
+    {
+      "file": "SWC-101/overflow_simple_add_fixed.sol",
+      "label": "safe",
+      "swc_id": "SWC-101",
+      "doc": "SWC-101.md",
+      "snippet": "overflow_simple_add_fixed.sol"
+    },
+    {
       "file": "SWC-104/unchecked_return_value.sol",
       "label": "vulnerable",
       "swc_id": "SWC-104",
