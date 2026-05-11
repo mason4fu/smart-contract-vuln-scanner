@@ -84,8 +84,10 @@ def detect_arithmetic(compiler_output: dict[str, Any]) -> list[Finding]:
                     continue
                 if function.get("kind") == "constructor" or bool(function.get("isConstructor", False)):
                     continue
+                if _is_safe_math_helper_function(function):
+                    continue
                 fn_name = _function_name(function)
-                is_unchecked_fn = False
+                seen_keys: set[tuple[str, int, int, str]] = set()
                 for node, ancestors in _walk_with_ancestors(function):
                     finding = _evaluate_node(
                         node=node,
@@ -99,11 +101,17 @@ def detect_arithmetic(compiler_output: dict[str, Any]) -> list[Finding]:
                     )
                     if finding is None:
                         continue
+                    loc = finding.location
+                    key = (
+                        finding.contract,
+                        loc.line_start if loc else 0,
+                        loc.column_start if loc else 0,
+                        finding.function,
+                    )
+                    if key in seen_keys:
+                        continue
+                    seen_keys.add(key)
                     findings.append(finding)
-                    is_unchecked_fn = True
-                    break
-                if is_unchecked_fn:
-                    continue
     return findings
 
 
@@ -327,6 +335,23 @@ def _is_safe_math_expression(node: dict[str, Any]) -> bool:
     return False
 
 
+def _is_safe_math_helper_function(function: dict[str, Any]) -> bool:
+    name = _function_name(function)
+    lowered = name.lower()
+    if lowered not in _SAFE_MATH_MEMBERS and not lowered.endswith(tuple(_SAFE_MATH_MEMBERS)):
+        return False
+    has_guard = False
+    for node in _find_nodes(function, "FunctionCall"):
+        expr = node.get("expression")
+        if not isinstance(expr, dict):
+            continue
+        callee = expr.get("name")
+        if callee in {"require", "assert"}:
+            has_guard = True
+            break
+    return has_guard
+
+
 def _suppressed_by_version(
     version: tuple[int, int, int] | None, ancestors: list[dict[str, Any]]
 ) -> bool:
@@ -348,19 +373,30 @@ def _has_explicit_bound_guard(
     target_expr: dict[str, Any], ancestors: list[dict[str, Any]]
 ) -> bool:
     target_binary: dict[str, Any] | None = None
+    target_op = ""
+    left_sig = ""
+    right_sig = ""
     if target_expr.get("nodeType") == "BinaryOperation" and target_expr.get("operator") in _RISKY_BINARY_OPS:
         target_binary = target_expr
+        target_op = str(target_binary.get("operator", ""))
+        left_sig = _expr_signature(target_binary.get("leftExpression"))
+        right_sig = _expr_signature(target_binary.get("rightExpression"))
     elif target_expr.get("nodeType") == "Assignment":
-        rhs = target_expr.get("rightHandSide")
-        if isinstance(rhs, dict) and rhs.get("nodeType") == "BinaryOperation":
-            if rhs.get("operator") in _RISKY_BINARY_OPS:
-                target_binary = rhs
-    if target_binary is None:
+        assignment_op = str(target_expr.get("operator", ""))
+        if assignment_op in _RISKY_ASSIGNMENT_OPS:
+            target_op = assignment_op[0]
+            left_sig = _expr_signature(target_expr.get("leftHandSide"))
+            right_sig = _expr_signature(target_expr.get("rightHandSide"))
+        else:
+            rhs = target_expr.get("rightHandSide")
+            if isinstance(rhs, dict) and rhs.get("nodeType") == "BinaryOperation":
+                if rhs.get("operator") in _RISKY_BINARY_OPS:
+                    target_binary = rhs
+                    target_op = str(target_binary.get("operator", ""))
+                    left_sig = _expr_signature(target_binary.get("leftExpression"))
+                    right_sig = _expr_signature(target_binary.get("rightExpression"))
+    if not target_op:
         return False
-
-    target_op = str(target_binary.get("operator", ""))
-    left_sig = _expr_signature(target_binary.get("leftExpression"))
-    right_sig = _expr_signature(target_binary.get("rightExpression"))
 
     for anc in reversed(ancestors):
         if anc.get("nodeType") != "FunctionDefinition":
@@ -388,6 +424,14 @@ def _has_explicit_bound_guard(
                 rhs = b.get("rightExpression")
                 if not isinstance(lhs, dict) or not isinstance(rhs, dict):
                     continue
+                lhs_sig = _expr_signature(lhs)
+                rhs_sig = _expr_signature(rhs)
+                if target_op == "-" and cmp_op in {">=", ">"}:
+                    if lhs_sig == left_sig and rhs_sig == right_sig:
+                        return True
+                if target_op == "-" and cmp_op in {"<=", "<"}:
+                    if lhs_sig == right_sig and rhs_sig == left_sig:
+                        return True
                 if lhs.get("nodeType") != "BinaryOperation":
                     continue
                 if lhs.get("operator") != target_op:
@@ -397,7 +441,6 @@ def _has_explicit_bound_guard(
                 if guard_left != left_sig or guard_right != right_sig:
                     continue
 
-                rhs_sig = _expr_signature(rhs)
                 # v1 safe suppression only for classic additive overflow check:
                 # require(a + b >= a) or require(a + b >= b)
                 if target_op == "+" and cmp_op in {">=", ">"} and rhs_sig in {left_sig, right_sig}:

@@ -163,6 +163,11 @@ def compiled_arithmetic_patterns():
 
 
 @pytest.fixture(scope="session")
+def compiled_arithmetic_advanced():
+    return compile_sol_fixture("ArithmeticAdvanced.sol", version="0.4.25")
+
+
+@pytest.fixture(scope="session")
 def compiled_arithmetic_safe_08():
     return compile_sol_fixture("ArithmeticSafe08.sol")
 

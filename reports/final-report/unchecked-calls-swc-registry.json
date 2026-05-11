@@ -1,0 +1,73 @@
+{
+  "ground_truth": {
+    "repo": "SmartContractSecurity/SWC-registry",
+    "commit": "1b6227074ecd180b374e4844153afdda0332f979",
+    "entries": [
+      {
+        "file": "SWC-104/unchecked_return_value.sol",
+        "label": "vulnerable",
+        "swc_id": "SWC-104",
+        "doc": "SWC-104.md",
+        "snippet": "unchecked_return_value.sol",
+        "vuln_functions": [
+          "callnotchecked"
+        ],
+        "lines": [
+          10
+        ]
+      }
+    ]
+  },
+  "results": [
+    {
+      "dataset": "swc-registry",
+      "file": "SWC-104/unchecked_return_value.sol",
+      "label": "vulnerable",
+      "swc_id": "SWC-104",
+      "ground_truth_lines": [
+        10
+      ],
+      "vuln_functions": [
+        "callnotchecked"
+      ],
+      "solc_version": "0.4.25",
+      "compile_error": null,
+      "source_findings": [
+        {
+          "title": "Unchecked external call result",
+          "contract": "ReturnValue",
+          "function": "callnotchecked",
+          "severity": "medium",
+          "confidence": "high",
+          "swc_id": "SWC-104",
+          "line_start": 10
+        }
+      ],
+      "bytecode_findings": [
+        {
+          "title": "Unchecked external call result (bytecode)",
+          "contract": "ReturnValue",
+          "function": "",
+          "severity": "medium",
+          "confidence": "medium",
+          "swc_id": "SWC-104",
+          "line_start": 0
+        }
+      ]
+    }
+  ],
+  "aggregate": {
+    "tp": 1,
+    "fp": 0,
+    "fn": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0,
+    "compile_skipped": 0
+  },
+  "protocol": {
+    "granularity": "line-level",
+    "tolerance": 6,
+    "compile_errors": "excluded from precision/recall/F1"
+  }
+}

@@ -1,0 +1,399 @@
+{
+  "ground_truth": {
+    "repo": "SmartContractSecurity/SWC-registry",
+    "commit": "1b6227074ecd180b374e4844153afdda0332f979",
+    "entries": [
+      {
+        "file": "SWC-101/tokensalechallenge.sol",
+        "label": "vulnerable",
+        "swc_id": "SWC-101",
+        "doc": "SWC-101.md",
+        "snippet": "tokensalechallenge.sol",
+        "lines": [
+          21,
+          23,
+          30
+        ]
+      },
+      {
+        "file": "SWC-101/integer_overflow_mapping_sym_1.sol",
+        "label": "vulnerable",
+        "swc_id": "SWC-101",
+        "doc": "SWC-101.md",
+        "snippet": "integer_overflow_mapping_sym_1.sol",
+        "lines": [
+          9
+        ]
+      },
+      {
+        "file": "SWC-101/integer_overflow_mapping_sym_1_fixed.sol",
+        "label": "safe",
+        "swc_id": "SWC-101",
+        "doc": "SWC-101.md",
+        "snippet": "integer_overflow_mapping_sym_1_fixed.sol"
+      },
+      {
+        "file": "SWC-101/integer_overflow_minimal.sol",
+        "label": "vulnerable",
+        "swc_id": "SWC-101",
+        "doc": "SWC-101.md",
+        "snippet": "integer_overflow_minimal.sol",
+        "lines": [
+          10
+        ]
+      },
+      {
+        "file": "SWC-101/integer_overflow_minimal_fixed.sol",
+        "label": "safe",
+        "swc_id": "SWC-101",
+        "doc": "SWC-101.md",
+        "snippet": "integer_overflow_minimal_fixed.sol"
+      },
+      {
+        "file": "SWC-101/integer_overflow_mul.sol",
+        "label": "vulnerable",
+        "swc_id": "SWC-101",
+        "doc": "SWC-101.md",
+        "snippet": "integer_overflow_mul.sol",
+        "lines": [
+          10
+        ]
+      },
+      {
+        "file": "SWC-101/integer_overflow_mul_fixed.sol",
+        "label": "safe",
+        "swc_id": "SWC-101",
+        "doc": "SWC-101.md",
+        "snippet": "integer_overflow_mul_fixed.sol"
+      },
+      {
+        "file": "SWC-101/integer_overflow_multitx_multifunc_feasible.sol",
+        "label": "vulnerable",
+        "swc_id": "SWC-101",
+        "doc": "SWC-101.md",
+        "snippet": "integer_overflow_multitx_multifunc_feasible.sol",
+        "lines": [
+          24
+        ]
+      },
+      {
+        "file": "SWC-101/integer_overflow_multitx_multifunc_feasible_fixed.sol",
+        "label": "safe",
+        "swc_id": "SWC-101",
+        "doc": "SWC-101.md",
+        "snippet": "integer_overflow_multitx_multifunc_feasible_fixed.sol"
+      },
+      {
+        "file": "SWC-101/integer_overflow_multitx_onefunc_feasible.sol",
+        "label": "vulnerable",
+        "swc_id": "SWC-101",
+        "doc": "SWC-101.md",
+        "snippet": "integer_overflow_multitx_onefunc_feasible.sol",
+        "lines": [
+          21
+        ]
+      },
+      {
+        "file": "SWC-101/integer_overflow_multitx_onefunc_feasible_fixed.sol",
+        "label": "safe",
+        "swc_id": "SWC-101",
+        "doc": "SWC-101.md",
+        "snippet": "integer_overflow_multitx_onefunc_feasible_fixed.sol"
+      },
+      {
+        "file": "SWC-101/integer_overflow_multitx_onefunc_infeasible.sol",
+        "label": "safe",
+        "swc_id": "SWC-101",
+        "doc": "SWC-101.md",
+        "snippet": "integer_overflow_multitx_onefunc_infeasible.sol"
+      },
+      {
+        "file": "SWC-101/overflow_simple_add.sol",
+        "label": "vulnerable",
+        "swc_id": "SWC-101",
+        "doc": "SWC-101.md",
+        "snippet": "overflow_simple_add.sol",
+        "lines": [
+          7
+        ]
+      },
+      {
+        "file": "SWC-101/overflow_simple_add_fixed.sol",
+        "label": "safe",
+        "swc_id": "SWC-101",
+        "doc": "SWC-101.md",
+        "snippet": "overflow_simple_add_fixed.sol"
+      }
+    ]
+  },
+  "results": [
+    {
+      "dataset": "swc-registry",
+      "file": "SWC-101/tokensalechallenge.sol",
+      "label": "vulnerable",
+      "swc_id": "SWC-101",
+      "ground_truth_lines": [
+        21,
+        23,
+        30
+      ],
+      "solc_version": "0.4.25",
+      "compile_error": null,
+      "source_findings": [
+        {
+          "title": "Potential integer overflow/underflow in arithmetic operation",
+          "contract": "TokenSaleChallenge",
+          "function": "buy",
+          "severity": "medium",
+          "confidence": "medium",
+          "swc_id": "SWC-101",
+          "line_start": 21
+        },
+        {
+          "title": "Potential integer overflow/underflow in arithmetic operation",
+          "contract": "TokenSaleChallenge",
+          "function": "buy",
+          "severity": "high",
+          "confidence": "high",
+          "swc_id": "SWC-101",
+          "line_start": 23
+        },
+        {
+          "title": "Potential integer overflow/underflow in arithmetic operation",
+          "contract": "TokenSaleChallenge",
+          "function": "sell",
+          "severity": "high",
+          "confidence": "medium",
+          "swc_id": "SWC-101",
+          "line_start": 30
+        }
+      ]
+    },
+    {
+      "dataset": "swc-registry",
+      "file": "SWC-101/integer_overflow_mapping_sym_1.sol",
+      "label": "vulnerable",
+      "swc_id": "SWC-101",
+      "ground_truth_lines": [
+        9
+      ],
+      "solc_version": "0.4.25",
+      "compile_error": null,
+      "source_findings": [
+        {
+          "title": "Potential integer overflow/underflow in arithmetic operation",
+          "contract": "IntegerOverflowMappingSym1",
+          "function": "init",
+          "severity": "high",
+          "confidence": "high",
+          "swc_id": "SWC-101",
+          "line_start": 9
+        }
+      ]
+    },
+    {
+      "dataset": "swc-registry",
+      "file": "SWC-101/integer_overflow_mapping_sym_1_fixed.sol",
+      "label": "safe",
+      "swc_id": "SWC-101",
+      "ground_truth_lines": [],
+      "solc_version": "0.4.25",
+      "compile_error": null,
+      "source_findings": []
+    },
+    {
+      "dataset": "swc-registry",
+      "file": "SWC-101/integer_overflow_minimal.sol",
+      "label": "vulnerable",
+      "swc_id": "SWC-101",
+      "ground_truth_lines": [
+        10
+      ],
+      "solc_version": "0.4.25",
+      "compile_error": null,
+      "source_findings": [
+        {
+          "title": "Potential integer overflow/underflow in arithmetic operation",
+          "contract": "IntegerOverflowMinimal",
+          "function": "run",
+          "severity": "high",
+          "confidence": "high",
+          "swc_id": "SWC-101",
+          "line_start": 10
+        }
+      ]
+    },
+    {
+      "dataset": "swc-registry",
+      "file": "SWC-101/integer_overflow_minimal_fixed.sol",
+      "label": "safe",
+      "swc_id": "SWC-101",
+      "ground_truth_lines": [],
+      "solc_version": "0.4.25",
+      "compile_error": null,
+      "source_findings": []
+    },
+    {
+      "dataset": "swc-registry",
+      "file": "SWC-101/integer_overflow_mul.sol",
+      "label": "vulnerable",
+      "swc_id": "SWC-101",
+      "ground_truth_lines": [
+        10
+      ],
+      "solc_version": "0.4.25",
+      "compile_error": null,
+      "source_findings": [
+        {
+          "title": "Potential integer overflow/underflow in arithmetic operation",
+          "contract": "IntegerOverflowMul",
+          "function": "run",
+          "severity": "high",
+          "confidence": "high",
+          "swc_id": "SWC-101",
+          "line_start": 10
+        }
+      ]
+    },
+    {
+      "dataset": "swc-registry",
+      "file": "SWC-101/integer_overflow_mul_fixed.sol",
+      "label": "safe",
+      "swc_id": "SWC-101",
+      "ground_truth_lines": [],
+      "solc_version": "0.4.25",
+      "compile_error": null,
+      "source_findings": []
+    },
+    {
+      "dataset": "swc-registry",
+      "file": "SWC-101/integer_overflow_multitx_multifunc_feasible.sol",
+      "label": "vulnerable",
+      "swc_id": "SWC-101",
+      "ground_truth_lines": [
+        24
+      ],
+      "solc_version": "0.4.25",
+      "compile_error": null,
+      "source_findings": [
+        {
+          "title": "Potential integer overflow/underflow in arithmetic operation",
+          "contract": "IntegerOverflowMultiTxMultiFuncFeasible",
+          "function": "run",
+          "severity": "high",
+          "confidence": "high",
+          "swc_id": "SWC-101",
+          "line_start": 24
+        }
+      ]
+    },
+    {
+      "dataset": "swc-registry",
+      "file": "SWC-101/integer_overflow_multitx_multifunc_feasible_fixed.sol",
+      "label": "safe",
+      "swc_id": "SWC-101",
+      "ground_truth_lines": [],
+      "solc_version": "0.4.25",
+      "compile_error": null,
+      "source_findings": []
+    },
+    {
+      "dataset": "swc-registry",
+      "file": "SWC-101/integer_overflow_multitx_onefunc_feasible.sol",
+      "label": "vulnerable",
+      "swc_id": "SWC-101",
+      "ground_truth_lines": [
+        21
+      ],
+      "solc_version": "0.4.25",
+      "compile_error": null,
+      "source_findings": [
+        {
+          "title": "Potential integer overflow/underflow in arithmetic operation",
+          "contract": "IntegerOverflowMultiTxOneFuncFeasible",
+          "function": "run",
+          "severity": "high",
+          "confidence": "high",
+          "swc_id": "SWC-101",
+          "line_start": 21
+        }
+      ]
+    },
+    {
+      "dataset": "swc-registry",
+      "file": "SWC-101/integer_overflow_multitx_onefunc_feasible_fixed.sol",
+      "label": "safe",
+      "swc_id": "SWC-101",
+      "ground_truth_lines": [],
+      "solc_version": "0.4.25",
+      "compile_error": null,
+      "source_findings": []
+    },
+    {
+      "dataset": "swc-registry",
+      "file": "SWC-101/integer_overflow_multitx_onefunc_infeasible.sol",
+      "label": "safe",
+      "swc_id": "SWC-101",
+      "ground_truth_lines": [],
+      "solc_version": "0.4.25",
+      "compile_error": null,
+      "source_findings": [
+        {
+          "title": "Potential integer overflow/underflow in arithmetic operation",
+          "contract": "IntegerOverflowMultiTxOneFuncInfeasible",
+          "function": "run",
+          "severity": "high",
+          "confidence": "high",
+          "swc_id": "SWC-101",
+          "line_start": 20
+        }
+      ]
+    },
+    {
+      "dataset": "swc-registry",
+      "file": "SWC-101/overflow_simple_add.sol",
+      "label": "vulnerable",
+      "swc_id": "SWC-101",
+      "ground_truth_lines": [
+        7
+      ],
+      "solc_version": "0.4.24",
+      "compile_error": null,
+      "source_findings": [
+        {
+          "title": "Potential integer overflow/underflow in arithmetic operation",
+          "contract": "Overflow_Add",
+          "function": "add",
+          "severity": "high",
+          "confidence": "high",
+          "swc_id": "SWC-101",
+          "line_start": 7
+        }
+      ]
+    },
+    {
+      "dataset": "swc-registry",
+      "file": "SWC-101/overflow_simple_add_fixed.sol",
+      "label": "safe",
+      "swc_id": "SWC-101",
+      "ground_truth_lines": [],
+      "solc_version": "0.4.25",
+      "compile_error": null,
+      "source_findings": []
+    }
+  ],
+  "aggregate": {
+    "tp": 9,
+    "fp": 1,
+    "fn": 0,
+    "precision": 0.9,
+    "recall": 1.0,
+    "f1": 0.9473684210526316,
+    "compile_skipped": 0
+  },
+  "protocol": {
+    "granularity": "line-level",
+    "tolerance": 6,
+    "compile_errors": "excluded from precision/recall/F1"
+  }
+}

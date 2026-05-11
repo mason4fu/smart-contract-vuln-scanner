@@ -88,8 +88,10 @@ def main() -> None:
             "doc": doc_name,
             "snippet": snippet_name,
         }
-        if "vuln_functions" in entry:
-            gt_entry["vuln_functions"] = entry["vuln_functions"]
+        for key, value in entry.items():
+            if key in {"swc_id", "doc", "snippet", "label"}:
+                continue
+            gt_entry[key] = value
         ground_truth_entries.append(gt_entry)
 
     payload = {
