@@ -38,6 +38,9 @@ def test_tx_origin_vuln_source_findings(compiled_tx_origin_vuln):
     assert f.severity == Severity.HIGH
     assert f.contract == "TxOriginVuln"
     assert "withdraw" in f.function or "tx.origin" in f.description
+    assert f.remediation_steps
+    assert f.secure_pattern
+    assert "msg.sender" in f.remediation_example
 
 
 def test_tx_origin_deduplicated_per_function(compiled_tx_origin_twice):
@@ -168,6 +171,7 @@ def test_tx_origin_vuln_bytecode_findings(compiled_tx_origin_vuln):
     assert len(findings) >= 1
     assert findings[0].severity == Severity.MEDIUM
     assert "ORIGIN" in findings[0].title or "tx.origin" in findings[0].title.lower()
+    assert "pc(s)" in findings[0].description
 
 
 def test_safe_contract_no_bytecode_findings(compiled_safe_contract):
@@ -283,6 +287,22 @@ def test_generic_indexed_write_not_flagged_as_access_control(compiled_generic_in
     )
 
 
+def test_config_surface_flags_unguarded_treasury_update(compiled_config_surface):
+    contracts = analyze_source(compiled_config_surface)
+    detector = AccessControlDetector()
+    findings = detector.detect_from_source(contracts)
+
+    set_treasury = [f for f in findings if f.function == "setTreasury"]
+    set_counter = [f for f in findings if f.function == "setCounter"]
+    set_treasury_safe = [f for f in findings if f.function == "setTreasurySafe"]
+
+    assert set_treasury, "setTreasury should be treated as a privileged config write"
+    assert any("missing authorization" in f.title.lower() for f in set_treasury)
+    assert set_treasury[0].severity == Severity.HIGH
+    assert not set_counter, "Generic counter setters should not be promoted to access-control"
+    assert not set_treasury_safe, "Owner-gated treasury updates should not be flagged"
+
+
 def test_nested_helper_auth_is_detected(compiled_nested_auth_check):
     contracts = analyze_source(compiled_nested_auth_check)
     detector = AccessControlDetector()
@@ -309,6 +329,42 @@ def test_modifier_helper_auth_is_detected(compiled_modifier_helper_auth):
     assert not missing_auth, (
         f"Modifier-helper auth should suppress missing-auth finding: {findings}"
     )
+
+
+def test_helper_sensitive_actions_propagate_to_public_entrypoints(compiled_helper_sensitive_actions):
+    contracts = analyze_source(compiled_helper_sensitive_actions)
+    detector = AccessControlDetector()
+    findings = detector.detect_from_source(contracts)
+
+    contract = next(c for c in contracts if c.name == "HelperSensitiveActions")
+    set_owner = next(f for f in contract.functions if f.name == "setOwnerViaHelper")
+    set_treasury = next(f for f in contract.functions if f.name == "setTreasuryViaNestedHelper")
+    grant_role = next(f for f in contract.functions if f.name == "grantRoleViaHelper")
+    guarded = next(f for f in contract.functions if f.name == "setOwnerViaGuardedHelper")
+
+    assert any(
+        action.kind == "owner_change" and "via helper" in action.description
+        for action in set_owner.sensitive_actions
+    ), "Owner mutation hidden in a helper should propagate to the public entrypoint"
+    assert any(
+        action.kind == "config_set" and "via helper" in action.description
+        for action in set_treasury.sensitive_actions
+    ), "Nested helper config writes should propagate to the public entrypoint"
+    assert any(
+        action.kind == "role_grant" and "via helper" in action.description
+        for action in grant_role.sensitive_actions
+    ), "Helper role writes should propagate to the public entrypoint"
+    assert guarded.has_auth_guard, "Helper-based guard should still protect the safe entrypoint"
+
+    owner_findings = [f for f in findings if f.function == "setOwnerViaHelper"]
+    treasury_findings = [f for f in findings if f.function == "setTreasuryViaNestedHelper"]
+    role_findings = [f for f in findings if f.function == "grantRoleViaHelper"]
+    guarded_findings = [f for f in findings if f.function == "setOwnerViaGuardedHelper"]
+
+    assert owner_findings, "Public helper wrapper around owner mutation should be reported"
+    assert treasury_findings, "Public helper wrapper around config mutation should be reported"
+    assert role_findings, "Public helper wrapper around role grant should be reported"
+    assert not guarded_findings, "Guarded helper wrapper should not be reported"
 
 
 def test_wrong_constructor_surface_finding(compiled_wrong_constructor_name):

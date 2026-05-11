@@ -33,6 +33,7 @@ analysis. Run
 ```bash
 uv run scanner scan contracts/MyContract.sol
 uv run scanner scan contracts/MyContract.sol --format json
+uv run scanner scan contracts/MyContract.sol --format sarif
 ```
 
 ### Scan a directory
@@ -57,7 +58,7 @@ uv run scanner scan MyContract.bin
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--format`, `-f` | `text` | Output format: `json` or `text` |
+| `--format`, `-f` | `text` | Output format: `json`, `text`, or `sarif` |
 | `--output`, `-o` | `reports/` | Report output directory |
 | `--detector`, `-d` | all | Run only a specific detector |
 | `--bytecode-only` | false | Skip source analysis |
@@ -167,9 +168,10 @@ Implementation: `src/scanner/detectors/arithmetic.py` · Tests: `tests/test_arit
 
 ## Evaluation Datasets
 
-- **SmartBugs Curated** (18 access control contracts) — 100% precision, 100% recall, F1=1.000
-- **Not-So-Smart-Contracts** (3 contracts) — 100% precision, 100% recall, F1=1.000
-- **SWC Registry pinned subset** (10 contracts/snippets) — 100% precision, 100% recall, F1=1.000
+- **Access control**
+  - SmartBugs Curated — compiled `15/18`, precision `1.000`, recall `1.000`, F1 `1.000`
+  - Not-So-Smart-Contracts — compiled `3/3`, precision `1.000`, recall `1.000`, F1 `1.000`
+  - SWC Registry pinned subset — compiled `10/10`, precision `1.000`, recall `1.000`, F1 `1.000`
 - **Unchecked external calls**:
   - SmartBugs unchecked subset — precision 1.000, recall 1.000, F1=1.000
   - SolidiFI Unhandled-Exceptions scoped subset — precision 1.000, recall 0.898, F1=0.946
@@ -181,6 +183,33 @@ Implementation: `src/scanner/detectors/arithmetic.py` · Tests: `tests/test_arit
   - Compiled 15/15
   - TP=21, FP=1, FN=2
   - precision 0.955, recall 0.913, F1=0.933
+- **Reentrancy (SmartBugs curated reentrancy subset, structural heuristic)**:
+  - Compiled 31/31
+  - Contract recall 31/31 = 1.000
+  - Line overlap at ±3 lines: 30/31 = 0.968
+
+Saved benchmark artifacts for the final report live under `reports/final-report/`.
+See `reports/final-report/summary.md` and [`docs/final-report-prep.md`](docs/final-report-prep.md).
+
+For CI-style integration, the scanner can also emit SARIF:
+
+```bash
+uv run scanner scan contracts/ --format sarif --output reports
+```
+
+This writes a `.sarif` file suitable for code-scanning workflows and a
+`*.project-summary.json` artifact for multi-file scans.
+
+Baseline comparisons are also generated now:
+
+- `Slither 0.11.5` on overlapping access-control, unchecked-call, and reentrancy slices
+- a naive SWC-104 syntax baseline for contrast with the semantic `stored but not used` detector
+
+Headline comparison points from `reports/final-report/summary.md`:
+
+- Access control / SmartBugs: our scanner `P/R/F1 = 1.000/1.000/1.000`, Slither `0.700/0.368/0.483`
+- Unchecked external calls / SolidiFI scoped subset: our scanner recall `0.898`, Slither recall `0.695`
+- Reentrancy / SmartBugs: our scanner compiles `31/31` with line recall `0.968`; Slither reaches `1.000` line recall on its compiled subset but compiles only `29/31`
 
 Run the access control detector against the evaluation datasets:
 
@@ -193,6 +222,8 @@ uv run python scripts/evaluate_swc_registry.py
 uv run python scripts/fetch_unchecked_call_datasets.py
 uv run python scripts/evaluate_unchecked_calls.py
 uv run python scripts/evaluate_arithmetic.py --output reports/arithmetic-eval.json
+uv run python scripts/evaluate_baselines.py --output reports/final-report/baselines.json
+uv run python scripts/collect_final_report_metrics.py
 ```
 
 See [`docs/evaluation.md`](docs/evaluation.md) for methodology and results.

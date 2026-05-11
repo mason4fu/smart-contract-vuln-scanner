@@ -27,7 +27,7 @@ These runs use the Solidity AST pipeline only (no `--bytecode-only`). Pre-0.8 ar
 
 | Contract | Concept | Vulnerable or Safe | Exact scanner command | Expected findings summary | Caveats |
 |---|---|---|---|---|---|
-| `contracts/src/demo/DemoAccessControlVulnerable.sol` | One file with unguarded withdraw, ownership change, admin grant, and treasury config | Vulnerable | `uv run scanner scan contracts/src/demo/DemoAccessControlVulnerable.sol --detector access-control --format text --output reports/demo` | Multiple SWC-105 findings (severities vary with rule); compare to `DemoAccessControlSafe.sol` | Detector threat model may omit some config writes (for example treasury) until that surface is classified; bytecode-only mode is weak for `msg.sender` quality. |
+| `contracts/src/demo/DemoAccessControlVulnerable.sol` | One file with unguarded withdraw, ownership change, admin grant, and treasury config | Vulnerable | `uv run scanner scan contracts/src/demo/DemoAccessControlVulnerable.sol --detector access-control --format text --output reports/demo` | Multiple SWC-105 findings, including `setTreasury`; compare to `DemoAccessControlSafe.sol` | Useful worked example for threat-model expansion: treasury-style config writes are now treated as privileged surfaces; bytecode-only mode is still weak for `msg.sender` quality. |
 | `contracts/src/demo/DemoAccessControlSafe.sol` | Same surfaces with `onlyOwner` and related guards | Safe | `uv run scanner scan contracts/src/demo/DemoAccessControlSafe.sol --detector access-control --format text --output reports/demo` | `No findings.` | Negative control for the access-control segment. |
 
 ### Access-control bytecode note

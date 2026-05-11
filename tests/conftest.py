@@ -98,6 +98,11 @@ def compiled_generic_indexed_write():
 
 
 @pytest.fixture(scope="session")
+def compiled_config_surface():
+    return compile_sol_fixture("ConfigSurface.sol")
+
+
+@pytest.fixture(scope="session")
 def compiled_nested_auth_check():
     return compile_sol_fixture("NestedAuthCheck.sol")
 
@@ -110,6 +115,11 @@ def compiled_wrong_constructor_name():
 @pytest.fixture(scope="session")
 def compiled_modifier_helper_auth():
     return compile_sol_fixture("ModifierHelperAuth.sol")
+
+
+@pytest.fixture(scope="session")
+def compiled_helper_sensitive_actions():
+    return compile_sol_fixture("HelperSensitiveActions.sol")
 
 
 @pytest.fixture(scope="session")
