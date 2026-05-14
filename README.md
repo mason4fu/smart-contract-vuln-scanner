@@ -3,14 +3,18 @@
 A static-analysis tool for detecting vulnerabilities in Solidity smart contracts.
 Supports both **source-level (AST)** and **bytecode-level (EVM)** analysis.
 
-> **CS 521 – Foundations in Blockchain** · Group Project
+> **CS 521 – Foundations in Blockchain** · Group Project · **Delivered**
 
 ---
 
 ## Status
 
+The course project is **complete**: all planned detectors, the end-to-end scan
+pipeline, evaluation scripts, and final-report artifacts are in place.
+
 | Area | Status |
 |------|--------|
+| Course deliverable | ✅ Complete |
 | Repository structure | ✅ Complete |
 | Python package scaffold | ✅ Complete |
 | Foundry workspace | ✅ Complete |
@@ -18,11 +22,11 @@ Supports both **source-level (AST)** and **bytecode-level (EVM)** analysis.
 | Smoke tests | ✅ Complete |
 | Vulnerability detectors | ✅ Complete (access-control, reentrancy, unchecked external calls, arithmetic) |
 | Full analysis pipeline | ✅ Complete |
+| Datasets & evaluation | ✅ Complete (see [Evaluation](#evaluation-datasets)) |
 
-The scanner includes access-control, reentrancy, unchecked external call, and
+The scanner ships access-control, reentrancy, unchecked external call, and
 arithmetic detectors with source-level AST analysis and bytecode-level EVM
-analysis. Run
-`uv run scanner scan <file.sol>` to start scanning.
+analysis. Run `uv run scanner scan <file.sol>` to scan a contract.
 
 ---
 
@@ -66,7 +70,7 @@ uv run scanner scan MyContract.bin
 
 ## Detectors
 
-### `access-control` (implemented)
+### `access-control`
 
 Detects access control vulnerabilities in Solidity contracts.
 
@@ -81,7 +85,7 @@ Detects access control vulnerabilities in Solidity contracts.
 
 See [`docs/access-control-detector.md`](docs/access-control-detector.md) for details.
 
-### `reentrancy` (implemented)
+### `reentrancy`
 
 Detects potential reentrancy vulnerabilities in Solidity contracts (external
 interaction before state effects / checks-effects-interactions risk).
@@ -100,7 +104,7 @@ uv run scanner scan contracts/src --detector reentrancy --format json
 
 See `src/scanner/detectors/reentrancy.py` and `tests/test_reentrancy_detector.py` for details.
 
-### `unchecked-external-calls` (implemented)
+### `unchecked-external-calls`
 
 Detects unchecked success handling for Solidity low-level external calls.
 
@@ -126,7 +130,7 @@ It does not target high-level typed external calls or `.transfer(...)`.
 
 See [`docs/unchecked-external-calls.md`](docs/unchecked-external-calls.md) for details.
 
-### `arithmetic` (implemented)
+### `arithmetic`
 
 Detects potential integer overflow/underflow (SWC-101) for risky arithmetic:
 `+`, `-`, `*`, compound assignments (`+=`, `-=`, `*=`), and unary `++` / `--`.
@@ -200,7 +204,7 @@ uv run scanner scan contracts/ --format sarif --output reports
 This writes a `.sarif` file suitable for code-scanning workflows and a
 `*.project-summary.json` artifact for multi-file scans.
 
-Baseline comparisons are also generated now:
+Baseline comparisons for the final report include:
 
 - `Slither 0.11.5` on overlapping access-control, unchecked-call, and reentrancy slices
 - a naive SWC-104 syntax baseline for contrast with the semantic `stored but not used` detector
@@ -211,7 +215,7 @@ Headline comparison points from `reports/final-report/summary.md`:
 - Unchecked external calls / SolidiFI scoped subset: our scanner recall `0.898`, Slither recall `0.695`
 - Reentrancy / SmartBugs: our scanner compiles `31/31` with line recall `0.968`; Slither reaches `1.000` line recall on its compiled subset but compiles only `29/31`
 
-Run the access control detector against the evaluation datasets:
+Reproduce evaluations (access control, unchecked calls, arithmetic, baselines):
 
 ```bash
 uv run python scripts/evaluate_smartbugs.py
@@ -376,6 +380,8 @@ Examples: `feature/reentrancy-detector`, `fix/ast-loader-crash`, `docs/add-examp
 
 ## Contribution Workflow
 
+Use this flow if you fork the repo or add follow-up work after the course submission.
+
 1. Create a branch from `master`: `git checkout -b feature/my-detector`
 2. Make changes in small, focused commits
 3. Run `pwsh scripts/verify.ps1` before pushing
@@ -384,25 +390,26 @@ Examples: `feature/reentrancy-detector`, `fix/ast-loader-crash`, `docs/add-examp
 
 ---
 
-## What to Build Next
+## What we shipped
 
-Contributors should implement vulnerability detectors. Each detector should:
+- **Detectors:** `access-control`, `reentrancy`, `unchecked-external-calls`, `arithmetic` (rules and docs linked in [Detectors](#detectors) above).
+- **Outputs:** JSON, plain text, and SARIF; multi-file project summaries under `--output`.
+- **Evidence:** Dataset numbers in [Evaluation](#evaluation-datasets); saved artifacts under `reports/final-report/` (see `reports/final-report/summary.md`).
 
-1. Live in a new module (e.g., `src/scanner/detectors/reentrancy.py`)
-2. Accept compiler output (AST and/or bytecode) as input
-3. Produce `Finding` objects (see `scanner.models.findings`)
-4. Have corresponding tests in `tests/`
-5. Have a Solidity fixture contract in `contracts/src/` if needed
+---
 
-### Suggested first detectors
+## Extending the scanner (optional)
 
-- Reentrancy (unchecked external calls before state updates) — implemented
-- Unchecked return values on low-level calls — implemented (`unchecked-external-calls`)
-- Access control issues (missing `onlyOwner` patterns) — implemented
-- Integer overflow/underflow (pre-0.8.0 patterns) — implemented (`arithmetic`)
-- Further ideas: timestamp dependence, weak randomness, front-running heuristics
+New detectors should follow the same pattern as the existing ones:
 
-### Architecture pointers
+1. Live in a module under `src/scanner/detectors/` (e.g. `reentrancy.py`).
+2. Accept compiler output (AST and/or bytecode) as input.
+3. Emit `Finding` objects (`scanner.models.findings`).
+4. Include tests in `tests/` and fixtures in `contracts/src/` when useful.
+
+**Ideas not in scope for this submission:** timestamp dependence, weak randomness, front-running heuristics, or deeper path-sensitive analysis.
+
+**Architecture pointers**
 
 - `scanner.compiler.solc` – compile Solidity and get AST + bytecode
 - `scanner.ast.loader` – extract and walk ASTs
